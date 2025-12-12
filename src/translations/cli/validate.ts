@@ -1,0 +1,113 @@
+import * as path from 'node:path';
+import type { MissingTranslation, ValidationResult } from '../core/types.js';
+import { getAvailableLanguages, getNamespaces, readTranslations } from '../utils/utils.js';
+import { loadConfig } from './init.js';
+
+/**
+ * Validate all translations against the source language
+ * Checks for missing keys and empty values
+ */
+export function validateTranslations(projectRoot: string = process.cwd()): ValidationResult {
+  const config = loadConfig(projectRoot);
+  const translationsPath = path.join(projectRoot, config.translationsPath);
+  const sourceLanguage = config.sourceLanguage;
+
+  const missing: MissingTranslation[] = [];
+  const empty: MissingTranslation[] = [];
+
+  // Read source translations
+  const sourceTranslations = readTranslations(translationsPath, sourceLanguage);
+  const sourceNamespaces = getNamespaces(translationsPath, sourceLanguage);
+
+  // Get all available languages
+  const languages = getAvailableLanguages(translationsPath).filter((lang) => lang !== sourceLanguage);
+
+  console.log('=====');
+  console.log('Validating translations');
+  console.log('=====');
+  console.log(`Source language: ${sourceLanguage}`);
+  console.log(`Target languages: ${languages.join(', ')}`);
+  console.log(`Namespaces: ${sourceNamespaces.join(', ')}`);
+  console.log('=====');
+
+  // Validate each language
+  for (const language of languages) {
+    const targetTranslations = readTranslations(translationsPath, language);
+
+    // Check each namespace
+    for (const namespace of sourceNamespaces) {
+      const sourceKeys = sourceTranslations[namespace] || {};
+      const targetKeys = targetTranslations[namespace] || {};
+
+      // Check for missing or empty translations
+      for (const [key, sourceValue] of Object.entries(sourceKeys)) {
+        const targetValue = targetKeys[key];
+
+        // Missing key in target language
+        if (targetValue === undefined) {
+          missing.push({
+            namespace,
+            key,
+            language,
+            sourceValue
+          });
+        }
+        // Empty value in target language
+        else if (typeof targetValue === 'string' && targetValue.trim() === '') {
+          empty.push({
+            namespace,
+            key,
+            language,
+            sourceValue
+          });
+        }
+      }
+    }
+  }
+
+  const valid = missing.length === 0 && empty.length === 0;
+
+  if (valid) {
+    console.log('✓ All translations are valid!');
+  } else {
+    if (missing.length > 0) {
+      console.log(`\n⚠ Found ${missing.length} missing translations:`);
+      for (const item of missing.slice(0, 10)) {
+        console.log(`  ${item.language}/${item.namespace}.json -> ${item.key}`);
+      }
+      if (missing.length > 10) {
+        console.log(`  ... and ${missing.length - 10} more`);
+      }
+    }
+
+    if (empty.length > 0) {
+      console.log(`\n⚠ Found ${empty.length} empty translations:`);
+      for (const item of empty.slice(0, 10)) {
+        console.log(`  ${item.language}/${item.namespace}.json -> ${item.key}`);
+      }
+      if (empty.length > 10) {
+        console.log(`  ... and ${empty.length - 10} more`);
+      }
+    }
+  }
+
+  console.log('=====');
+
+  return { valid, missing, empty };
+}
+
+/**
+ * Get all missing or empty translations for a specific language
+ */
+export function getMissingForLanguage(
+  projectRoot: string,
+  language: string
+): Array<MissingTranslation & { type: 'missing' | 'empty' }> {
+  const result = validateTranslations(projectRoot);
+  const items = [
+    ...result.missing.filter((m) => m.language === language).map((m) => ({ ...m, type: 'missing' as const })),
+    ...result.empty.filter((e) => e.language === language).map((e) => ({ ...e, type: 'empty' as const }))
+  ];
+
+  return items;
+}

@@ -1,0 +1,62 @@
+{
+  "name": "lexis",
+  "version": "0.1.0",
+  "description": "A powerful CLI and library for managing i18n translations with validation, auto-translation, and TypeScript type generation",
+  "private": false,
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "bin": {
+    "lexis": "./dist/cli/translations.js"
+  },
+  "scripts": {
+    "build": "tsup && mkdir -p dist/translations/core && cp src/translations/core/translations-config.schema.json dist/translations/core/",
+    "dev": "tsc --noEmit --watch",
+    "prepublishOnly": "npm run build",
+    "lint": "biome check",
+    "format": "biome format --write",
+    "check-types": "tsc --noEmit",
+    "changeset": "changeset",
+    "version": "changeset version",
+    "release": "npm run build && changeset publish"
+  },
+  "keywords": [
+    "i18n",
+    "internationalization",
+    "translation",
+    "translations",
+    "localization",
+    "l10n",
+    "google-translate",
+    "typescript",
+    "cli"
+  ],
+  "author": "",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": ""
+  },
+  "devDependencies": {
+    "@changesets/cli": "^2.29.7",
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "^20",
+    "tsup": "^8.5.0",
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "@inquirer/prompts": "^8.0.2",
+    "dotenv": "^17.2.2",
+    "js-yaml": "^4.1.0"
+  }
+}

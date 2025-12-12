@@ -1,0 +1,94 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://raw.githubusercontent.com/anthropics/claude-code/main/packages/env-scripts/translations-config.schema.json",
+  "title": "Translation Configuration",
+  "description": "Configuration for the translation management system",
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "JSON Schema reference"
+    },
+    "translationsPath": {
+      "type": "string",
+      "description": "Path to the translations directory relative to project root",
+      "default": "public/static/locales",
+      "examples": ["public/static/locales", "src/locales", "locales"]
+    },
+    "languages": {
+      "type": "array",
+      "description": "List of language codes to support",
+      "items": {
+        "type": "string",
+        "enum": [
+          "en",
+          "fr",
+          "it",
+          "pl",
+          "es",
+          "pt",
+          "de",
+          "de_at",
+          "nl",
+          "sv",
+          "hu",
+          "cs",
+          "ja",
+          "zh_hk",
+          "zh_cn",
+          "ko",
+          "ru",
+          "ar",
+          "he",
+          "tr",
+          "da",
+          "fi",
+          "no",
+          "pt_br"
+        ]
+      },
+      "minItems": 1,
+      "uniqueItems": true,
+      "default": ["en"]
+    },
+    "sourceLanguage": {
+      "type": "string",
+      "description": "Source language for translations (usually 'en')",
+      "enum": [
+        "en",
+        "fr",
+        "it",
+        "pl",
+        "es",
+        "pt",
+        "de",
+        "de_at",
+        "nl",
+        "sv",
+        "hu",
+        "cs",
+        "ja",
+        "zh_hk",
+        "zh_cn",
+        "ko",
+        "ru",
+        "ar",
+        "he",
+        "tr",
+        "da",
+        "fi",
+        "no",
+        "pt_br"
+      ],
+      "default": "en"
+    },
+    "typesOutputPath": {
+      "type": "string",
+      "description": "Path to output TypeScript types file",
+      "default": "src/types/i18nTypes.ts",
+      "examples": ["src/types/i18nTypes.ts", "src/types/translations.ts"]
+    }
+  },
+  "required": ["translationsPath", "languages", "sourceLanguage"],
+  "additionalProperties": false
+}
