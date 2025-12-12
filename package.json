@@ -1,5 +1,5 @@
 {
-  "name": "@designedhead/lexis",
+  "name": "poly-lexis",
   "version": "0.1.0",
   "description": "A powerful CLI and library for managing i18n translations with validation, auto-translation, and TypeScript type generation",
   "private": false,
@@ -24,7 +24,7 @@
     "dev": "tsc --noEmit --watch",
     "prepublishOnly": "npm run build",
     "lint": "biome check",
-    "format": "biome format --write",
+    "format": "biome format --write .",
     "check-types": "tsc --noEmit",
     "changeset": "changeset",
     "version": "changeset version",
@@ -51,6 +51,7 @@
     "access": "public"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.3.8",
     "@changesets/cli": "^2.29.7",
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^20",
