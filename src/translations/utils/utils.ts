@@ -41,7 +41,7 @@ export function writeTranslation(
   }
 
   const filePath = path.join(langPath, `${namespace}.json`);
-  fs.writeFileSync(filePath, JSON.stringify(translations, null, 2) + '\n', 'utf-8');
+  fs.writeFileSync(filePath, `${JSON.stringify(translations, null, 2)}\n`, 'utf-8');
 }
 
 /**

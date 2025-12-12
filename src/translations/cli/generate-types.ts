@@ -63,7 +63,10 @@ export function generateTranslationTypes(projectRoot: string = process.cwd()): v
 
   // Format with Biome
   try {
-    execSync(`pnpm biome format --write ${outputFilePath}`, { stdio: 'inherit', cwd: projectRoot });
+    execSync(`pnpm biome format --write ${outputFilePath}`, {
+      stdio: 'inherit',
+      cwd: projectRoot
+    });
   } catch {
     console.warn('Failed to format with Biome, continuing without formatting...');
   }

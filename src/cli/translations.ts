@@ -1,8 +1,8 @@
 import 'dotenv/config';
-import { confirm, input, select } from '@inquirer/prompts';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { parseArgs } from 'node:util';
+import { confirm, input, select } from '@inquirer/prompts';
 import { addTranslationKey } from '../translations/cli/add-key.js';
 import { loadConfig } from '../translations/cli/init.js';
 import { initTranslationsInteractive } from '../translations/cli/init-interactive.js';

@@ -265,6 +265,116 @@ The system automatically preserves variables in the format `{{variableName}}` du
 "WELCOME_USER": "¡Bienvenido, {{userName}}!"
 ```
 
+## Custom Translation Providers
+
+By default, Lexis uses Google Translate for auto-translation. However, you can easily plug in your own custom translation provider.
+
+### Creating a Custom Provider
+
+Implement the `TranslationProvider` interface:
+
+```typescript
+import type { TranslationProvider, TranslateOptions } from 'lexis';
+
+export class MyCustomProvider implements TranslationProvider {
+  async translate(options: TranslateOptions): Promise<string> {
+    const { text, sourceLang, targetLang, apiKey } = options;
+
+    // IMPORTANT: Preserve {{variable}} interpolations
+    const preserved = this.preserveVariables(text);
+
+    // Call your translation API (example)
+    const response = await fetch('https://your-translation-api.com/translate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        text: preserved.text,
+        from: sourceLang,
+        to: targetLang,
+        apiKey: apiKey,
+      }),
+    });
+
+    const data = await response.json();
+    const translated = data.translatedText;
+
+    // Restore variables
+    return this.restoreVariables(translated, preserved.variableMap);
+  }
+
+  async translateBatch(
+    texts: string[],
+    sourceLang: string,
+    targetLang: string,
+    apiKey?: string,
+    delayMs?: number,
+  ): Promise<string[]> {
+    const results: string[] = [];
+
+    for (const text of texts) {
+      const translated = await this.translate({
+        text,
+        sourceLang,
+        targetLang,
+        apiKey,
+      });
+      results.push(translated);
+
+      // Add delay to avoid rate limiting
+      if (delayMs && delayMs > 0) {
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+      }
+    }
+
+    return results;
+  }
+
+  // Helper: Preserve {{variable}} interpolations
+  private preserveVariables(text: string) {
+    const variableMap = new Map<string, string>();
+    let index = 0;
+
+    const processedText = text.replace(/\{\{([^}]+)\}\}/g, (match) => {
+      const placeholder = `__VAR_${index}__`;
+      variableMap.set(placeholder, match);
+      index++;
+      return placeholder;
+    });
+
+    return { text: processedText, variableMap };
+  }
+
+  // Helper: Restore {{variable}} interpolations
+  private restoreVariables(text: string, variableMap: Map<string, string>): string {
+    let result = text;
+    for (const [placeholder, original] of variableMap) {
+      result = result.replace(new RegExp(placeholder, 'g'), original);
+    }
+    return result;
+  }
+}
+```
+
+### Using Your Custom Provider
+
+```typescript
+import { setTranslationProvider } from 'lexis';
+import { MyCustomProvider } from './my-custom-provider';
+
+// Set your custom provider
+setTranslationProvider(new MyCustomProvider());
+
+// Now all translation operations will use your provider
+// This affects: auto-fill, add-key --auto-fill, etc.
+```
+
+### Important Notes
+
+1. **Variable Preservation is Required**: Your provider MUST preserve `{{variable}}` interpolations
+2. **Language Codes**: Handle language codes like `pt_BR`, `zh_CN` according to your API's format
+3. **Rate Limiting**: Implement delays in `translateBatch` to avoid hitting API rate limits
+4. **Error Handling**: Add appropriate error handling for API failures
+
 ## Workflow Examples
 
 ### Daily Development

@@ -94,7 +94,7 @@ export function initTranslations(projectRoot: string, config: TranslationConfig 
       SUCCESS: 'Success'
     };
 
-    fs.writeFileSync(commonPath, JSON.stringify(sampleTranslations, null, 2) + '\n', 'utf-8');
+    fs.writeFileSync(commonPath, `${JSON.stringify(sampleTranslations, null, 2)}\n`, 'utf-8');
     console.log(`Created sample file: ${commonPath}`);
   }
 
@@ -120,7 +120,7 @@ export function initTranslations(projectRoot: string, config: TranslationConfig 
       typesOutputPath: finalConfig.typesOutputPath
     };
 
-    fs.writeFileSync(configPath, JSON.stringify(configContent, null, 2) + '\n', 'utf-8');
+    fs.writeFileSync(configPath, `${JSON.stringify(configContent, null, 2)}\n`, 'utf-8');
     console.log(`Created config file: ${configPath}`);
   }
 
