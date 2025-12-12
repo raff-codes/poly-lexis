@@ -1,5 +1,5 @@
 {
-  "name": "lexis",
+  "name": "@designedhead/lexis",
   "version": "0.1.0",
   "description": "A powerful CLI and library for managing i18n translations with validation, auto-translation, and TypeScript type generation",
   "private": false,
@@ -17,7 +17,7 @@
     }
   },
   "bin": {
-    "lexis": "./dist/cli/translations.js"
+    "lexis": "dist/cli/translations.js"
   },
   "scripts": {
     "build": "tsup && mkdir -p dist/translations/core && cp src/translations/core/translations-config.schema.json dist/translations/core/",
@@ -46,6 +46,9 @@
   "repository": {
     "type": "git",
     "url": ""
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "devDependencies": {
     "@changesets/cli": "^2.29.7",

@@ -1,36 +1,36 @@
-# Lexis
+# poly-lexis
 
 A powerful CLI and library for managing i18n translations with validation, auto-translation, and TypeScript type generation.
 
 ## Overview
 
-Lexis provides a complete solution for managing internationalization (i18n) in your applications. It offers smart translation management with automatic validation, Google Translate integration for auto-filling missing translations, and TypeScript type generation for type-safe translations.
+poly-lexis provides a complete solution for managing internationalization (i18n) in your applications. It offers smart translation management with automatic validation, Google Translate integration for auto-filling missing translations, and TypeScript type generation for type-safe translations.
 
 ## Installation
 
 ```bash
-npm install lexis
+npm install poly-lexis
 # or
-yarn add lexis
+yarn add poly-lexis
 # or
-pnpm add lexis
+pnpm add poly-lexis
 ```
 
 ## Quick Start
 
 ```bash
 # Initialize translations in your project
-npx lexis
+npx poly-lexis
 
 # Add a new translation key
-npx lexis add
+npx poly-lexis add
 
 # Auto-fill missing translations
 export GOOGLE_TRANSLATE_API_KEY=your_key
-npx lexis --auto-fill
+npx poly-lexis --auto-fill
 
 # Validate and generate types
-npx lexis
+npx poly-lexis
 ```
 
 ## Features
@@ -51,32 +51,32 @@ Run without any command to validate, auto-fill (optional), and generate types:
 
 ```bash
 # Basic validation and type generation
-lexis
+poly-lexis
 
 # With auto-translation
-lexis --auto-fill
+poly-lexis --auto-fill
 
 # Auto-fill only specific language
-lexis --auto-fill --language fr
+poly-lexis --auto-fill --language fr
 
 # Dry run to preview changes
-lexis --auto-fill --dry-run
+poly-lexis --auto-fill --dry-run
 
 # Skip type generation
-lexis --skip-types
+poly-lexis --skip-types
 ```
 
 ### Add Translation Keys
 
 ```bash
 # Interactive mode
-lexis add
+poly-lexis add
 
 # With flags
-lexis add --namespace common --key HELLO --value "Hello"
+poly-lexis add --namespace common --key HELLO --value "Hello"
 
 # With auto-translation
-lexis add -n common -k WELCOME -v "Welcome" --auto-fill
+poly-lexis add -n common -k WELCOME -v "Welcome" --auto-fill
 ```
 
 ### CLI Options
@@ -97,7 +97,7 @@ lexis add -n common -k WELCOME -v "Welcome" --auto-fill
 
 ## Configuration
 
-Lexis uses a `.translationsrc.json` file in your project root for configuration:
+poly-lexis uses a `.translationsrc.json` file in your project root for configuration:
 
 ```json
 {
@@ -157,12 +157,12 @@ Translation files are organized by namespace and language:
 
 ## Programmatic API
 
-Lexis can be used as a library in your Node.js code:
+poly-lexis can be used as a library in your Node.js code:
 
 ### Initialize Translations
 
 ```typescript
-import { initTranslationsInteractive } from 'lexis';
+import { initTranslationsInteractive } from 'poly-lexis';
 
 await initTranslationsInteractive(process.cwd());
 ```
@@ -170,7 +170,7 @@ await initTranslationsInteractive(process.cwd());
 ### Add Translation Key
 
 ```typescript
-import { addTranslationKey } from 'lexis';
+import { addTranslationKey } from 'poly-lexis';
 
 await addTranslationKey(process.cwd(), {
   namespace: 'common',
@@ -184,7 +184,7 @@ await addTranslationKey(process.cwd(), {
 ### Validate Translations
 
 ```typescript
-import { validateTranslations } from 'lexis';
+import { validateTranslations } from 'poly-lexis';
 
 const result = await validateTranslations(
   '/path/to/translations',
@@ -200,7 +200,7 @@ if (!result.valid) {
 ### Generate TypeScript Types
 
 ```typescript
-import { generateTranslationTypes } from 'lexis';
+import { generateTranslationTypes } from 'poly-lexis';
 
 generateTranslationTypes(process.cwd());
 ```
@@ -208,7 +208,7 @@ generateTranslationTypes(process.cwd());
 ### Auto-fill Missing Translations
 
 ```typescript
-import { autoFillTranslations } from 'lexis';
+import { autoFillTranslations } from 'poly-lexis';
 
 await autoFillTranslations({
   translationsPath: '/path/to/translations',

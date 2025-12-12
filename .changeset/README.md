@@ -11,7 +11,7 @@ npm run changeset
 ```
 
 This will prompt you to:
-1. Select which packages to bump (in this case, just `lexis`)
+1. Select which packages to bump (in this case, just `poly-lexis`)
 2. Choose the bump type (major, minor, or patch)
 3. Write a summary of the changes
 

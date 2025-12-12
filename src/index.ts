@@ -1,5 +1,5 @@
 /**
- * Lexis - Translation Management Toolkit
+ * poly-lexis - Translation Management Toolkit
  *
  * A complete solution for managing i18n translations:
  * - Initialize translation structure
