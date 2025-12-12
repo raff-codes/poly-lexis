@@ -25,6 +25,7 @@ export const SUPPORTED_LANGUAGES = [
   'zh', // Chinese (Simplified) - Google uses 'zh' or 'zh-CN'
   'zh_cn', // Chinese (Simplified) - alternative format
   'zh_tw', // Chinese (Traditional)
+  'zh_hk', // Chinese (Hong Kong)
   'co', // Corsican
   'hr', // Croatian
   'cs', // Czech
@@ -42,6 +43,7 @@ export const SUPPORTED_LANGUAGES = [
   'gl', // Galician
   'ka', // Georgian
   'de', // German
+  'de_at', // German (Austria)
   'el', // Greek
   'gn', // Guarani
   'gu', // Gujarati
