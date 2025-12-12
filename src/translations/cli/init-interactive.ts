@@ -1,3 +1,4 @@
+import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { checkbox, confirm, input } from '@inquirer/prompts';
 import { SUPPORTED_LANGUAGES } from '../core/schema.js';
@@ -13,7 +14,7 @@ export async function initTranslationsInteractive(projectRoot: string = process.
 
   // Check if already initialized
   const configPath = path.join(projectRoot, '.translationsrc.json');
-  const alreadyExists = require('node:fs').existsSync(configPath);
+  const alreadyExists = fs.existsSync(configPath);
 
   if (alreadyExists) {
     console.log('⚠️  Configuration file already exists at .translationsrc.json\n');

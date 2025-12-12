@@ -1,6 +1,6 @@
 {
   "name": "poly-lexis",
-  "version": "0.1.0",
+  "version": "0.2.1",
   "description": "A powerful CLI and library for managing i18n translations with validation, auto-translation, and TypeScript type generation",
   "private": false,
   "type": "module",
