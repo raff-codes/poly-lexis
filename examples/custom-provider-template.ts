@@ -100,6 +100,7 @@ export class CustomTranslationProvider implements TranslationProvider {
   /**
    * Preserve {{variable}} interpolations by replacing with placeholders
    * IMPORTANT: This is required to prevent translation APIs from mangling variables
+   * Uses a format that won't be translated (uppercase + underscores + numbers)
    */
   private preserveVariables(text: string): {
     textWithPlaceholders: string;
@@ -109,7 +110,8 @@ export class CustomTranslationProvider implements TranslationProvider {
     let placeholderIndex = 0;
 
     const textWithPlaceholders = text.replace(/\{\{([^}]+)\}\}/g, (match) => {
-      const placeholder = `__PLACEHOLDER_${placeholderIndex}__`;
+      // Use XXX prefix (not a real word in any language) to avoid translation
+      const placeholder = `XXX_${placeholderIndex}_XXX`;
       variableMap.set(placeholder, match);
       placeholderIndex++;
       return placeholder;

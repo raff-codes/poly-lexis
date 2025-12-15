@@ -18,6 +18,7 @@ interface GoogleTranslateResponse {
 
 /**
  * Preserve {{variable}} interpolations by replacing with placeholders
+ * Uses a format that Google Translate won't translate (uppercase + underscores + numbers)
  */
 function preserveVariables(text: string): {
   textWithPlaceholders: string;
@@ -27,7 +28,8 @@ function preserveVariables(text: string): {
   let placeholderIndex = 0;
 
   const textWithPlaceholders = text.replace(/\{\{([^}]+)\}\}/g, (match) => {
-    const placeholder = `__PLACEHOLDER_${placeholderIndex}__`;
+    // Use XXX prefix (not a real word in any language) to avoid translation
+    const placeholder = `XXX_${placeholderIndex}_XXX`;
     variableMap.set(placeholder, match);
     placeholderIndex++;
     return placeholder;
