@@ -27,5 +27,20 @@ export default defineConfig([
     banner: {
       js: '#!/usr/bin/env node'
     }
+  },
+  // Verification script build with shebang
+  {
+    entry: {
+      'scripts/verify-translations': 'src/scripts/verify-translations.ts'
+    },
+    format: ['esm'],
+    dts: false,
+    splitting: false,
+    sourcemap: true,
+    target: 'es2022',
+    shims: true,
+    banner: {
+      js: '#!/usr/bin/env node'
+    }
   }
 ]);

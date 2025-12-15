@@ -301,10 +301,16 @@ if (command === 'add') {
       language: values.language,
       skipTypes: values['skip-types'],
       dryRun: values['dry-run']
-    }).catch((error) => {
-      console.error('Error:', error instanceof Error ? error.message : error);
-      process.exit(1);
-    });
+    })
+      .then((isValid) => {
+        if (!isValid) {
+          process.exit(1);
+        }
+      })
+      .catch((error) => {
+        console.error('Error:', error instanceof Error ? error.message : error);
+        process.exit(1);
+      });
   } else {
     // Interactive menu mode - show options
     (async () => {

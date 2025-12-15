@@ -79,6 +79,46 @@ poly-lexis add --namespace common --key HELLO --value "Hello"
 poly-lexis add -n common -k WELCOME -v "Welcome" --auto-fill
 ```
 
+### Verify Translations (CI/CD)
+
+For CI/CD pipelines, you can validate translations and fail the build if any are missing:
+
+```bash
+# In your project that uses poly-lexis
+npx poly-lexis --skip-types  # Validates translations, exits with code 1 if invalid
+
+# Or create a script in your package.json:
+{
+  "scripts": {
+    "verify-translations": "poly-lexis --skip-types"
+  }
+}
+
+# Then run in your CI/CD pipeline:
+npm run verify-translations
+```
+
+The command will:
+- ✅ Exit with code 0 if all translations are valid
+- ❌ Exit with code 1 if any translations are missing or empty
+
+This makes it perfect for CI/CD checks to prevent incomplete translations from being deployed.
+
+**Example CI/CD workflow (GitHub Actions):**
+
+```yaml
+name: Verify Translations
+on: [push, pull_request]
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+      - run: npm install
+      - run: npx poly-lexis --skip-types
+```
+
 ### CLI Options
 
 **Smart Mode:**

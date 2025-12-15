@@ -23,11 +23,12 @@ export interface ManageTranslationsOptions {
 /**
  * Smart translation management - handles init, validation, auto-fill, and type generation
  * based on the current state of the project
+ * @returns true if translations are valid, false otherwise
  */
 export async function manageTranslations(
   projectRoot: string = process.cwd(),
   options: ManageTranslationsOptions = {}
-): Promise<void> {
+): Promise<boolean> {
   const { autoFill = false, apiKey, limit = 1000, language, skipTypes = false, dryRun = false } = options;
 
   console.log('=====');
@@ -55,7 +56,7 @@ export async function manageTranslations(
   if (!fs.existsSync(sourceLangPath)) {
     console.log(`⚠️  Source language directory not found: ${sourceLangPath}`);
     console.log('Please add translation files to the source language directory.\n');
-    return;
+    return false;
   }
 
   // Step 3: Validate translations
@@ -127,4 +128,13 @@ export async function manageTranslations(
   }
 
   console.log('=====\n');
+
+  // Return validation status (true if valid after all operations)
+  if (autoFill && !dryRun && apiKey) {
+    // Re-validate to get final status
+    const finalValidation = validateTranslations(projectRoot);
+    return finalValidation.valid;
+  }
+
+  return validationResult.valid;
 }

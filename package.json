@@ -26,6 +26,7 @@
     "lint": "biome check",
     "format": "biome format --write .",
     "check-types": "tsc --noEmit",
+    "verify-translations": "node dist/scripts/verify-translations.js",
     "changeset": "changeset",
     "version": "changeset version",
     "release": "npm run build && changeset publish"
