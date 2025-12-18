@@ -1,5 +1,11 @@
 # poly-lexis
 
+## 0.4.0
+
+### Minor Changes
+
+- Language Fallback & improved language folder/file detection
+
 ## 0.3.2
 
 ### Patch Changes
