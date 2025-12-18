@@ -68,8 +68,8 @@ Commands:
   add             Add a new translation key
 
 Options (Smart Mode):
-  -a, --auto-fill         Auto-fill missing translations with Google Translate
-  --api-key <key>         Google Translate API key (or set GOOGLE_TRANSLATE_API_KEY)
+  -a, --auto-fill         Auto-fill missing translations with DeepL or Google Translate
+  --api-key <key>         Translation API key (or set DEEPL_API_KEY/GOOGLE_TRANSLATE_API_KEY)
   -l, --language <lang>   Process only this language
   --limit <number>        Max translations to process (default: 1000)
   --skip-types            Skip TypeScript type generation
@@ -88,7 +88,11 @@ Examples:
   # Smart mode - check and validate translations
   translations
 
-  # Smart mode - validate and auto-fill missing translations
+  # Smart mode - validate and auto-fill missing translations (DeepL)
+  export DEEPL_API_KEY=your_key
+  translations --auto-fill
+
+  # Smart mode - validate and auto-fill missing translations (Google)
   export GOOGLE_TRANSLATE_API_KEY=your_key
   translations --auto-fill
 
@@ -221,9 +225,11 @@ if (command === 'add') {
 
         let apiKey: string | undefined;
         if (autoTranslate) {
-          apiKey = values['api-key'] || process.env.GOOGLE_TRANSLATE_API_KEY;
+          const provider = config.provider || 'deepl';
+          const envVarName = provider === 'google' ? 'GOOGLE_TRANSLATE_API_KEY' : 'DEEPL_API_KEY';
+          apiKey = values['api-key'] || process.env[envVarName];
           if (!apiKey) {
-            console.log('\n⚠️  GOOGLE_TRANSLATE_API_KEY environment variable not found.');
+            console.log(`\n⚠️  ${envVarName} environment variable not found.`);
             console.log('Skipping auto-translation. Set this variable to enable auto-translation.\n');
           }
         }
@@ -257,12 +263,13 @@ if (command === 'add') {
       process.exit(1);
     }
 
-    const apiKey = values['api-key'] || process.env.GOOGLE_TRANSLATE_API_KEY;
+    const config = loadConfig(process.cwd());
+    const provider = config.provider || 'deepl';
+    const envVarName = provider === 'google' ? 'GOOGLE_TRANSLATE_API_KEY' : 'DEEPL_API_KEY';
+    const apiKey = values['api-key'] || process.env[envVarName];
 
     if (values['auto-fill'] && !apiKey) {
-      console.error(
-        'Error: --api-key or GOOGLE_TRANSLATE_API_KEY environment variable is required for auto-translation'
-      );
+      console.error(`Error: --api-key or ${envVarName} environment variable is required for auto-translation`);
       process.exit(1);
     }
 
@@ -291,7 +298,11 @@ if (command === 'add') {
 
   if (hasFlags) {
     // Flag mode - run with provided options
-    const apiKey = values['api-key'] || process.env.GOOGLE_TRANSLATE_API_KEY;
+    const configPath = path.join(process.cwd(), '.translationsrc.json');
+    const config = fs.existsSync(configPath) ? loadConfig(process.cwd()) : { provider: 'deepl' };
+    const provider = config.provider || 'deepl';
+    const envVarName = provider === 'google' ? 'GOOGLE_TRANSLATE_API_KEY' : 'DEEPL_API_KEY';
+    const apiKey = values['api-key'] || process.env[envVarName];
     const limit = Number.parseInt(values.limit || '1000', 10);
 
     manageTranslations(process.cwd(), {
@@ -336,7 +347,7 @@ if (command === 'add') {
             {
               name: '🤖 Auto-fill missing translations',
               value: 'autofill',
-              description: 'Automatically translate missing keys with Google Translate'
+              description: 'Automatically translate missing keys with DeepL or Google Translate'
             },
             {
               name: '📝 Generate TypeScript types',
@@ -446,9 +457,11 @@ if (command === 'add') {
 
           let apiKey: string | undefined;
           if (autoTranslate) {
-            apiKey = process.env.GOOGLE_TRANSLATE_API_KEY;
+            const provider = config.provider || 'deepl';
+            const envVarName = provider === 'google' ? 'GOOGLE_TRANSLATE_API_KEY' : 'DEEPL_API_KEY';
+            apiKey = process.env[envVarName];
             if (!apiKey) {
-              console.log('\n⚠️  GOOGLE_TRANSLATE_API_KEY environment variable not found.');
+              console.log(`\n⚠️  ${envVarName} environment variable not found.`);
               console.log('Skipping auto-translation. Set this variable to enable auto-translation.\n');
             }
           }
@@ -471,9 +484,12 @@ if (command === 'add') {
             skipTypes: true
           });
         } else if (action === 'autofill') {
-          const apiKey = process.env.GOOGLE_TRANSLATE_API_KEY;
+          const config = loadConfig(process.cwd());
+          const provider = config.provider || 'deepl';
+          const envVarName = provider === 'google' ? 'GOOGLE_TRANSLATE_API_KEY' : 'DEEPL_API_KEY';
+          const apiKey = process.env[envVarName];
           if (!apiKey) {
-            console.log('⚠️  GOOGLE_TRANSLATE_API_KEY environment variable not found.');
+            console.log(`⚠️  ${envVarName} environment variable not found.`);
             console.log('Please set it to enable auto-translation.\n');
             process.exit(1);
           }

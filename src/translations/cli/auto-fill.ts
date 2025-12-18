@@ -1,5 +1,7 @@
 import * as path from 'node:path';
-import { translateText } from '../utils/translator.js';
+import { DeepLTranslateProvider } from '../utils/deepl-translate-provider.js';
+import { GoogleTranslateProvider } from '../utils/google-translate-provider.js';
+import { getTranslationProvider, setTranslationProvider, translateText } from '../utils/translator.js';
 import { readTranslations, sortKeys, writeTranslation } from '../utils/utils.js';
 import { loadConfig } from './init.js';
 import { getMissingForLanguage } from './validate.js';
@@ -7,7 +9,7 @@ import { getMissingForLanguage } from './validate.js';
 interface AutoFillOptions {
   /** Language to fill translations for */
   language?: string;
-  /** Google Translate API key */
+  /** Translation API key (for DeepL or Google Translate) */
   apiKey?: string;
   /** Maximum number of translations to process */
   limit?: number;
@@ -28,8 +30,24 @@ export async function autoFillTranslations(
   const translationsPath = path.join(projectRoot, config.translationsPath);
   const { apiKey, limit = 1000, delayMs = 100, dryRun = false } = options;
 
+  // Set up the translation provider based on config (only if not already set by user)
+  const currentProvider = getTranslationProvider();
+  const isDefaultGoogleProvider = currentProvider.constructor.name === 'GoogleTranslateProvider';
+
+  // Only set provider if user hasn't already set a custom one
+  if (isDefaultGoogleProvider) {
+    const provider = config.provider || 'deepl';
+    if (provider === 'deepl') {
+      setTranslationProvider(new DeepLTranslateProvider());
+    } else {
+      setTranslationProvider(new GoogleTranslateProvider());
+    }
+  }
+
   if (!apiKey) {
-    throw new Error('Google Translate API key is required. Set GOOGLE_TRANSLATE_API_KEY or pass --api-key');
+    const provider = config.provider || 'deepl';
+    const envVarName = provider === 'google' ? 'GOOGLE_TRANSLATE_API_KEY' : 'DEEPL_API_KEY';
+    throw new Error(`Translation API key is required. Set ${envVarName} or pass --api-key`);
   }
 
   // Determine which languages to process
@@ -132,6 +150,20 @@ export async function fillNamespace(
 ): Promise<void> {
   const config = loadConfig(projectRoot);
   const translationsPath = path.join(projectRoot, config.translationsPath);
+
+  // Set up the translation provider based on config (only if not already set by user)
+  const currentProvider = getTranslationProvider();
+  const isDefaultGoogleProvider = currentProvider.constructor.name === 'GoogleTranslateProvider';
+
+  // Only set provider if user hasn't already set a custom one
+  if (isDefaultGoogleProvider) {
+    const provider = config.provider || 'deepl';
+    if (provider === 'deepl') {
+      setTranslationProvider(new DeepLTranslateProvider());
+    } else {
+      setTranslationProvider(new GoogleTranslateProvider());
+    }
+  }
 
   console.log(`Filling translations for ${language}/${namespace}.json`);
 

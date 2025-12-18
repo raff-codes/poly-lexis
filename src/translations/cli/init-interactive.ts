@@ -1,7 +1,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { checkbox, confirm, input } from '@inquirer/prompts';
-import { SUPPORTED_LANGUAGES } from '../core/schema.js';
+import { checkbox, confirm, input, select } from '@inquirer/prompts';
+import { SUPPORTED_LANGUAGES, type TranslationProviderType } from '../core/schema.js';
 import type { TranslationConfig } from '../core/types.js';
 import { DEFAULT_CONFIG } from '../core/types.js';
 import { initTranslations } from './init.js';
@@ -105,12 +105,31 @@ export async function initTranslationsInteractive(projectRoot: string = process.
     default: DEFAULT_CONFIG.typesOutputPath
   });
 
+  // Ask about translation provider
+  const provider = await select<TranslationProviderType>({
+    message: 'Which translation provider would you like to use?',
+    choices: [
+      {
+        name: 'DeepL (recommended)',
+        value: 'deepl',
+        description: 'High-quality translations, requires DEEPL_API_KEY'
+      },
+      {
+        name: 'Google Translate',
+        value: 'google',
+        description: 'Google Cloud Translation API, requires GOOGLE_TRANSLATE_API_KEY'
+      }
+    ],
+    default: 'deepl'
+  });
+
   // Summary
   console.log('\n📋 Configuration Summary:');
   console.log(`   Translations: ${translationsPath}`);
   console.log(`   Languages: ${languages.join(', ')}`);
   console.log(`   Source: ${sourceLanguage}`);
   console.log(`   Types: ${typesOutputPath}`);
+  console.log(`   Provider: ${provider}`);
 
   const confirmInit = await confirm({
     message: '\nProceed with initialization?',
@@ -127,7 +146,8 @@ export async function initTranslationsInteractive(projectRoot: string = process.
     translationsPath,
     languages,
     sourceLanguage,
-    typesOutputPath
+    typesOutputPath,
+    provider
   };
 
   console.log();

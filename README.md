@@ -4,7 +4,7 @@ A powerful CLI and library for managing i18n translations with validation, auto-
 
 ## Overview
 
-poly-lexis provides a complete solution for managing internationalization (i18n) in your applications. It offers smart translation management with automatic validation, Google Translate integration for auto-filling missing translations, and TypeScript type generation for type-safe translations.
+poly-lexis provides a complete solution for managing internationalization (i18n) in your applications. It offers smart translation management with automatic validation, DeepL and Google Translate integration for auto-filling missing translations, and TypeScript type generation for type-safe translations.
 
 ## Installation
 
@@ -19,13 +19,17 @@ pnpm add poly-lexis
 ## Quick Start
 
 ```bash
-# Initialize translations in your project
+# Initialize translations in your project (interactive setup)
 npx poly-lexis
 
 # Add a new translation key
 npx poly-lexis add
 
-# Auto-fill missing translations
+# Auto-fill missing translations with DeepL (recommended)
+export DEEPL_API_KEY=your_key
+npx poly-lexis --auto-fill
+
+# Or use Google Translate
 export GOOGLE_TRANSLATE_API_KEY=your_key
 npx poly-lexis --auto-fill
 
@@ -37,7 +41,8 @@ npx poly-lexis
 
 - ✅ **Smart translation management** - Automatic initialization and validation
 - ✅ **Interactive CLI** - User-friendly prompts for all operations
-- ✅ **Auto-translation** - Google Translate integration for missing translations
+- ✅ **Multiple providers** - DeepL (recommended) or Google Translate for auto-translation
+- ✅ **Custom providers** - Extensible architecture for custom translation services
 - ✅ **Type generation** - Generate TypeScript types for type-safe translations
 - ✅ **Validation** - Detect missing or empty translation keys
 - ✅ **Multiple namespaces** - Organize translations by feature/domain
@@ -122,8 +127,8 @@ jobs:
 ### CLI Options
 
 **Smart Mode:**
-- `-a, --auto-fill` - Auto-fill missing translations with Google Translate
-- `--api-key <key>` - Google Translate API key (or set GOOGLE_TRANSLATE_API_KEY env var)
+- `-a, --auto-fill` - Auto-fill missing translations with DeepL or Google Translate
+- `--api-key <key>` - Translation API key (or set DEEPL_API_KEY/GOOGLE_TRANSLATE_API_KEY env var)
 - `-l, --language <lang>` - Process only this language
 - `--limit <number>` - Max translations to process (default: 1000)
 - `--skip-types` - Skip TypeScript type generation
@@ -144,7 +149,8 @@ poly-lexis uses a `.translationsrc.json` file in your project root for configura
   "translationsPath": "public/static/locales",
   "languages": ["en", "es", "fr", "de"],
   "sourceLanguage": "en",
-  "typesOutputPath": "src/types/i18nTypes.ts"
+  "typesOutputPath": "src/types/i18nTypes.ts",
+  "provider": "deepl"
 }
 ```
 
@@ -154,10 +160,45 @@ poly-lexis uses a `.translationsrc.json` file in your project root for configura
 - `languages` - Array of language codes to support (default: `["en"]`)
 - `sourceLanguage` - Source language for translations (default: `"en"`)
 - `typesOutputPath` - Path to output TypeScript types (default: `src/types/i18nTypes.ts`)
+- `provider` - Translation provider to use: `"deepl"` or `"google"` (default: `"deepl"`)
 
 ### Environment Variables
 
-- `GOOGLE_TRANSLATE_API_KEY` - Google Translate API key for auto-translation
+- `DEEPL_API_KEY` - DeepL API key for auto-translation (when provider is "deepl")
+- `GOOGLE_TRANSLATE_API_KEY` - Google Translate API key for auto-translation (when provider is "google")
+
+### Translation Providers
+
+**DeepL (Recommended)**
+- Higher translation quality
+- Supports 30+ languages
+- Requires DeepL API key from https://www.deepl.com/pro-api
+- Set `"provider": "deepl"` in config and `DEEPL_API_KEY` environment variable
+
+**Google Translate**
+- Supports 100+ languages
+- Requires Google Cloud Translation API key
+- Set `"provider": "google"` in config and `GOOGLE_TRANSLATE_API_KEY` environment variable
+
+**Custom Providers**
+You can implement custom translation providers by implementing the `TranslationProvider` interface:
+
+```typescript
+import { setTranslationProvider, type TranslationProvider } from 'poly-lexis';
+
+class MyCustomProvider implements TranslationProvider {
+  async translate(options: TranslateOptions): Promise<string> {
+    // Your translation logic here
+  }
+
+  async translateBatch(texts: string[], sourceLang: string, targetLang: string, apiKey?: string): Promise<string[]> {
+    // Your batch translation logic here
+  }
+}
+
+// Set your custom provider before running auto-fill
+setTranslationProvider(new MyCustomProvider());
+```
 
 ### Directory Structure
 
@@ -217,7 +258,7 @@ await addTranslationKey(process.cwd(), {
   key: 'HELLO',
   value: 'Hello',
   autoTranslate: true,
-  apiKey: process.env.GOOGLE_TRANSLATE_API_KEY,
+  apiKey: process.env.DEEPL_API_KEY, // or GOOGLE_TRANSLATE_API_KEY
 });
 ```
 
@@ -250,11 +291,27 @@ generateTranslationTypes(process.cwd());
 ```typescript
 import { autoFillTranslations } from 'poly-lexis';
 
-await autoFillTranslations({
-  translationsPath: '/path/to/translations',
-  languages: ['es', 'fr'],
-  sourceLanguage: 'en',
-  apiKey: process.env.GOOGLE_TRANSLATE_API_KEY,
+// The provider is automatically selected based on .translationsrc.json
+await autoFillTranslations(process.cwd(), {
+  apiKey: process.env.DEEPL_API_KEY, // or GOOGLE_TRANSLATE_API_KEY
+  limit: 1000,
+  language: 'fr', // optional: auto-fill only this language
+  dryRun: false, // optional: preview without saving
+});
+```
+
+### Using Custom Translation Providers
+
+```typescript
+import { setTranslationProvider, autoFillTranslations } from 'poly-lexis';
+import { MyCustomProvider } from './my-provider';
+
+// Set your custom provider before auto-filling
+setTranslationProvider(new MyCustomProvider());
+
+// Now auto-fill will use your custom provider
+await autoFillTranslations(process.cwd(), {
+  apiKey: 'your-custom-api-key',
   limit: 1000,
 });
 ```
@@ -306,14 +363,27 @@ src/
 ## Requirements
 
 - Node.js 18+
-- (Optional) Google Translate API key for auto-translation
+- (Optional) DeepL API key or Google Translate API key for auto-translation
 
 ## How It Works
 
-1. **Initialization**: Creates `.translationsrc.json` and translation directory structure
+1. **Initialization**: Creates `.translationsrc.json` and translation directory structure with provider selection
 2. **Validation**: Compares all language files against source language to find missing keys
-3. **Auto-translation**: Uses Google Translate API to fill missing translations
+3. **Auto-translation**: Uses DeepL or Google Translate API (based on config) to fill missing translations
 4. **Type Generation**: Creates TypeScript types from translation keys for autocomplete and type safety
+
+## API Keys
+
+### DeepL API Key (Recommended)
+1. Sign up at https://www.deepl.com/pro-api
+2. Get your API key from the account dashboard
+3. Set `DEEPL_API_KEY` environment variable or pass via `--api-key` flag
+
+### Google Translate API Key
+1. Create a project in Google Cloud Console
+2. Enable the Cloud Translation API
+3. Create credentials (API key)
+4. Set `GOOGLE_TRANSLATE_API_KEY` environment variable or pass via `--api-key` flag
 
 ## License
 

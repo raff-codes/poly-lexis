@@ -117,7 +117,8 @@ export function initTranslations(projectRoot: string, config: TranslationConfig 
       translationsPath: finalConfig.translationsPath,
       languages,
       sourceLanguage,
-      typesOutputPath: finalConfig.typesOutputPath
+      typesOutputPath: finalConfig.typesOutputPath,
+      provider: finalConfig.provider
     };
 
     fs.writeFileSync(configPath, `${JSON.stringify(configContent, null, 2)}\n`, 'utf-8');

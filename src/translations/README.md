@@ -8,7 +8,8 @@ A comprehensive TypeScript-based solution for managing i18n translations in your
 - **Local-first**: All translations stored in your codebase
 - **TypeScript Support**: Auto-generate types for type-safe translations
 - **Variable Preservation**: Automatically preserves `{{variable}}` interpolations during translation
-- **Auto-translation**: Optional Google Translate integration for automated translations
+- **Multiple Providers**: DeepL (recommended) or Google Translate for automated translations
+- **Custom Providers**: Extensible architecture for custom translation services
 - **Validation**: Automatic checking for missing or empty translations
 - **Flexible Structure**: Namespace-based organization with per-language folders
 
@@ -192,8 +193,8 @@ translations --skip-types
 ```
 
 **Options:**
-- `-a, --auto-fill` - Auto-fill missing translations with Google Translate
-- `--api-key <key>` - Google Translate API key (or set `GOOGLE_TRANSLATE_API_KEY`)
+- `-a, --auto-fill` - Auto-fill missing translations with DeepL or Google Translate
+- `--api-key <key>` - Translation API key (or set `DEEPL_API_KEY` or `GOOGLE_TRANSLATE_API_KEY`)
 - `-l, --language <lang>` - Process only this language
 - `--limit <number>` - Max translations to process (default: 1000)
 - `--skip-types` - Skip TypeScript type generation
@@ -240,7 +241,8 @@ The `.translationsrc.json` file is automatically created on first run:
   "translationsPath": "public/static/locales",
   "languages": ["en", "fr", "es", "de", "pt", "pl", "it", "nl", "sv", "hu", "cs", "ja", "zh_hk", "de_at"],
   "sourceLanguage": "en",
-  "typesOutputPath": "src/types/i18nTypes.ts"
+  "typesOutputPath": "src/types/i18nTypes.ts",
+  "provider": "deepl"
 }
 ```
 
@@ -249,6 +251,7 @@ You can customize:
 - `languages` - Which languages to support
 - `sourceLanguage` - Source language for translations (usually 'en')
 - `typesOutputPath` - Where to generate TypeScript types
+- `provider` - Translation provider: `"deepl"` or `"google"` (default: `"deepl"`)
 
 ## Variable Interpolation
 
@@ -265,9 +268,24 @@ The system automatically preserves variables in the format `{{variableName}}` du
 "WELCOME_USER": "¡Bienvenido, {{userName}}!"
 ```
 
-## Custom Translation Providers
+## Translation Providers
 
-By default, Lexis uses Google Translate for auto-translation. However, you can easily plug in your own custom translation provider.
+### Built-in Providers
+
+**DeepL (Recommended)**
+- Higher translation quality
+- Supports 30+ languages
+- Get API key from https://www.deepl.com/pro-api
+- Set `"provider": "deepl"` in config and `DEEPL_API_KEY` environment variable
+
+**Google Translate**
+- Supports 100+ languages
+- Requires Google Cloud Translation API key
+- Set `"provider": "google"` in config and `GOOGLE_TRANSLATE_API_KEY` environment variable
+
+### Custom Translation Providers
+
+You can easily plug in your own custom translation provider by implementing the `TranslationProvider` interface.
 
 ### Creating a Custom Provider
 
@@ -422,7 +440,8 @@ Add to your CI pipeline:
 - name: Validate Translations
   run: pnpm translations
   env:
-    GOOGLE_TRANSLATE_API_KEY: ${{ secrets.GOOGLE_TRANSLATE_API_KEY }}
+    DEEPL_API_KEY: ${{ secrets.DEEPL_API_KEY }}
+    # Or use GOOGLE_TRANSLATE_API_KEY if provider is "google"
 ```
 
 This will fail the build if translations are incomplete.

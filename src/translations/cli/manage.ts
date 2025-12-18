@@ -71,8 +71,10 @@ export async function manageTranslations(
     // Step 4: Auto-fill if requested
     if (autoFill) {
       if (!apiKey) {
+        const provider = config.provider || 'deepl';
+        const envVarName = provider === 'google' ? 'GOOGLE_TRANSLATE_API_KEY' : 'DEEPL_API_KEY';
         console.log('\n⚠️  Auto-fill requested but no API key provided.');
-        console.log('Set GOOGLE_TRANSLATE_API_KEY or pass --api-key to enable auto-fill.\n');
+        console.log(`Set ${envVarName} or pass --api-key to enable auto-fill.\n`);
       } else {
         console.log(`\n🤖 Auto-filling ${totalMissing} missing translations...\n`);
         await autoFillTranslations(projectRoot, {
