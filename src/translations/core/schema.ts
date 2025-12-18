@@ -185,15 +185,19 @@ export type SupportedLanguage = (typeof SUPPORTED_LANGUAGES)[number];
  * JSON Schema for .translationsrc.json
  */
 export const TRANSLATION_CONFIG_SCHEMA = {
-  $schema: 'http://json-schema.org/draft-07/schema#',
   title: 'Translation Configuration',
   description: 'Configuration for the translation management system',
   type: 'object',
   properties: {
+    $schema: {
+      type: 'string',
+      description: 'JSON Schema reference'
+    },
     translationsPath: {
       type: 'string',
       description: 'Path to the translations directory relative to project root',
-      default: 'public/static/locales'
+      default: 'public/static/locales',
+      examples: ['public/static/locales', 'src/locales', 'locales']
     },
     languages: {
       type: 'array',
@@ -203,7 +207,8 @@ export const TRANSLATION_CONFIG_SCHEMA = {
         enum: SUPPORTED_LANGUAGES
       },
       minItems: 1,
-      uniqueItems: true
+      uniqueItems: true,
+      default: ['en']
     },
     sourceLanguage: {
       type: 'string',
@@ -214,7 +219,8 @@ export const TRANSLATION_CONFIG_SCHEMA = {
     typesOutputPath: {
       type: 'string',
       description: 'Path to output TypeScript types file',
-      default: 'src/types/i18nTypes.ts'
+      default: 'src/types/i18nTypes.ts',
+      examples: ['src/types/i18nTypes.ts', 'src/types/translations.ts']
     },
     provider: {
       type: 'string',

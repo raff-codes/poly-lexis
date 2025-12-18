@@ -42,5 +42,17 @@ export default defineConfig([
     banner: {
       js: '#!/usr/bin/env node'
     }
+  },
+  // Schema generation script build (no shebang since it's called via npm script)
+  {
+    entry: {
+      'scripts/generate-schema': 'src/scripts/generate-schema.ts'
+    },
+    format: ['esm'],
+    dts: false,
+    splitting: false,
+    sourcemap: true,
+    target: 'es2022',
+    shims: true
   }
 ]);

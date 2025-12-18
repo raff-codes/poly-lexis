@@ -20,13 +20,14 @@
     "lexis": "dist/cli/translations.js"
   },
   "scripts": {
-    "build": "tsup && mkdir -p dist/translations/core && cp src/translations/core/translations-config.schema.json dist/translations/core/",
+    "build": "tsup && node dist/scripts/generate-schema.js && mkdir -p dist/translations/core && cp src/translations/core/translations-config.schema.json dist/translations/core/",
     "dev": "tsc --noEmit --watch",
     "prepublishOnly": "npm run build",
     "lint": "biome check",
     "format": "biome format --write .",
     "check-types": "tsc --noEmit",
     "verify-translations": "node dist/scripts/verify-translations.js",
+    "generate-schema": "node dist/scripts/generate-schema.js",
     "changeset": "changeset",
     "version": "changeset version",
     "release": "npm run build && changeset publish"
