@@ -2,7 +2,7 @@
  * Translation provider types
  */
 export const TRANSLATION_PROVIDERS = ['deepl', 'google'] as const;
-export type TranslationProvider = (typeof TRANSLATION_PROVIDERS)[number];
+export type TranslationProviderType = (typeof TRANSLATION_PROVIDERS)[number];
 
 /**
  * DeepL supported target languages
@@ -253,7 +253,7 @@ export function isValidGoogleLanguage(lang: string): lang is GoogleLanguage {
  */
 export function isValidLanguageForProvider(
   lang: string,
-  provider: TranslationProvider
+  provider: TranslationProviderType
 ): boolean {
   switch (provider) {
     case 'deepl':
@@ -284,7 +284,7 @@ export function validateLanguages(languages: string[]): {
  */
 export function validateLanguagesForProvider(
   languages: string[],
-  provider: TranslationProvider
+  provider: TranslationProviderType
 ): {
   valid: boolean;
   invalid: string[];
@@ -299,7 +299,7 @@ export function validateLanguagesForProvider(
 /**
  * Get supported languages for a specific provider
  */
-export function getSupportedLanguages(provider: TranslationProvider): readonly string[] {
+export function getSupportedLanguages(provider: TranslationProviderType): readonly string[] {
   switch (provider) {
     case 'deepl':
       return DEEPL_LANGUAGES;
