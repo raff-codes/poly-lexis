@@ -277,7 +277,7 @@ export function validateLanguages(languages: string[]): {
 } {
   const invalid = languages.filter((lang) => !isValidLanguage(lang));
   return {
-    valid: invalid.length === 0,
+    valid: !invalid.length,
     invalid
   };
 }
@@ -294,7 +294,7 @@ export function validateLanguagesForProvider(
 } {
   const invalid = languages.filter((lang) => !isValidLanguageForProvider(lang, provider));
   return {
-    valid: invalid.length === 0,
+    valid: !invalid.length,
     invalid
   };
 }

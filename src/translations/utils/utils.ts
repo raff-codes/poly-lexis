@@ -131,3 +131,88 @@ export function ensureTranslationsStructure(translationsPath: string, languages:
     }
   }
 }
+
+/**
+ * Create an empty translation structure from a source translation file
+ * All values are set to empty strings, preserving the key structure
+ */
+export function createEmptyTranslationStructure(sourceFile: TranslationFile): TranslationFile {
+  const result: TranslationFile = {};
+
+  for (const key of Object.keys(sourceFile)) {
+    result[key] = '';
+  }
+
+  return result;
+}
+
+export interface SyncResult {
+  createdFolders: string[];
+  createdFiles: Array<{ language: string; namespace: string; path: string }>;
+  skippedFiles: Array<{ language: string; namespace: string; reason: string }>;
+}
+
+/**
+ * Synchronize translation structure based on source language
+ * - Ensures all configured languages have folders
+ * - Ensures all namespaces from source language exist in target languages
+ * - Creates files with empty values matching source structure
+ */
+export function syncTranslationStructure(
+  translationsPath: string,
+  languages: string[],
+  sourceLanguage: string
+): SyncResult {
+  const result: SyncResult = {
+    createdFolders: [],
+    createdFiles: [],
+    skippedFiles: []
+  };
+
+  // 1. Ensure all language folders exist
+  ensureTranslationsStructure(translationsPath, languages);
+
+  // 2. Get all namespaces from source language
+  const sourceNamespaces = getNamespaces(translationsPath, sourceLanguage);
+
+  if (!sourceNamespaces.length) {
+    return result; // No namespaces to sync
+  }
+
+  // 3. Read source translations once
+  const sourceTranslations = readTranslations(translationsPath, sourceLanguage);
+
+  // 4. Sync each target language
+  const targetLanguages = languages.filter((lang) => lang !== sourceLanguage);
+
+  for (const language of targetLanguages) {
+    for (const namespace of sourceNamespaces) {
+      const filePath = path.join(translationsPath, language, `${namespace}.json`);
+
+      // Check if file already exists
+      if (fs.existsSync(filePath)) {
+        result.skippedFiles.push({
+          language,
+          namespace,
+          reason: 'already exists'
+        });
+        continue;
+      }
+
+      // Create empty structure from source
+      const sourceFile = sourceTranslations[namespace] || {};
+      const emptyStructure = createEmptyTranslationStructure(sourceFile);
+
+      // Write the file
+      writeTranslation(translationsPath, language, namespace, emptyStructure);
+
+      result.createdFiles.push({
+        language,
+        namespace,
+        path: filePath
+      });
+    }
+  }
+
+  return result;
+}

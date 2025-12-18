@@ -1,6 +1,6 @@
 import * as path from 'node:path';
 import type { MissingTranslation, ValidationResult } from '../core/types.js';
-import { getAvailableLanguages, getNamespaces, readTranslations } from '../utils/utils.js';
+import { getNamespaces, readTranslations, syncTranslationStructure } from '../utils/utils.js';
 import { loadConfig } from './init.js';
 
 /**
@@ -19,8 +19,16 @@ export function validateTranslations(projectRoot: string = process.cwd()): Valid
   const sourceTranslations = readTranslations(translationsPath, sourceLanguage);
   const sourceNamespaces = getNamespaces(translationsPath, sourceLanguage);
 
-  // Get all available languages
-  const languages = getAvailableLanguages(translationsPath).filter((lang) => lang !== sourceLanguage);
+  // CRITICAL: Use config languages instead of filesystem languages
+  // This ensures we validate ALL configured languages, not just ones on disk
+  const languages = config.languages.filter((lang) => lang !== sourceLanguage);
+
+  // Sync structure before validation to ensure all files exist
+  const syncResult = syncTranslationStructure(translationsPath, config.languages, sourceLanguage);
+
+  if (syncResult.createdFiles.length > 0) {
+    console.log(`Created ${syncResult.createdFiles.length} missing namespace files during sync`);
+  }
 
   console.log('=====');
   console.log('Validating translations');
@@ -65,7 +73,7 @@ export function validateTranslations(projectRoot: string = process.cwd()): Valid
     }
   }
 
-  const valid = missing.length === 0 && empty.length === 0;
+  const valid = !missing.length && !empty.length;
 
   if (valid) {
     console.log('✓ All translations are valid!');

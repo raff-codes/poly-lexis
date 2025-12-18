@@ -36,7 +36,7 @@ export function generateTranslationTypes(projectRoot: string = process.cwd()): v
   // Get namespaces
   const namespaces = getNamespaces(translationsPath, sourceLanguage);
 
-  if (namespaces.length === 0) {
+  if (!namespaces.length) {
     throw new Error(`No translation files found in ${dirPath}`);
   }
 

@@ -3,7 +3,7 @@ import * as path from 'node:path';
 import { validateLanguages } from '../core/schema.js';
 import type { TranslationConfig } from '../core/types.js';
 import { DEFAULT_CONFIG, DEFAULT_LANGUAGES } from '../core/types.js';
-import { ensureTranslationsStructure, getAvailableLanguages } from '../utils/utils.js';
+import { ensureTranslationsStructure, getAvailableLanguages, syncTranslationStructure } from '../utils/utils.js';
 
 /**
  * Detect existing translation structure in common locations
@@ -98,14 +98,16 @@ export function initTranslations(projectRoot: string, config: TranslationConfig 
     console.log(`Created sample file: ${commonPath}`);
   }
 
-  // Create empty translation files for other languages
-  for (const lang of languages) {
-    if (lang === sourceLanguage) continue;
+  // Sync all namespaces from source to target languages
+  console.log('\nSynchronizing translation structure...');
+  const syncResult = syncTranslationStructure(translationsPath, languages, sourceLanguage);
 
-    const langCommonPath = path.join(translationsPath, lang, 'common.json');
-    if (!fs.existsSync(langCommonPath)) {
-      fs.writeFileSync(langCommonPath, '{}\n', 'utf-8');
-      console.log(`Created empty file: ${langCommonPath}`);
+  if (syncResult.createdFiles.length > 0) {
+    console.log(`Created ${syncResult.createdFiles.length} namespace files in target languages`);
+    const languageGroups = new Set(syncResult.createdFiles.map((f) => f.language));
+    for (const lang of languageGroups) {
+      const langFiles = syncResult.createdFiles.filter((f) => f.language === lang);
+      console.log(`  ${lang}: ${langFiles.map((f) => f.namespace).join(', ')}`);
     }
   }
 

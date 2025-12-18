@@ -1,5 +1,6 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { syncTranslationStructure } from '../utils/utils.js';
 import { autoFillTranslations } from './auto-fill.js';
 import { generateTranslationTypes } from './generate-types.js';
 import { initTranslations, loadConfig } from './init.js';
@@ -57,6 +58,16 @@ export async function manageTranslations(
     console.log(`⚠️  Source language directory not found: ${sourceLangPath}`);
     console.log('Please add translation files to the source language directory.\n');
     return false;
+  }
+
+  // Step 2.5: Sync translation structure
+  console.log('🔄 Synchronizing translation structure...\n');
+  const syncResult = syncTranslationStructure(translationsPath, config.languages, config.sourceLanguage);
+
+  if (syncResult.createdFiles.length > 0) {
+    console.log(`✓ Created ${syncResult.createdFiles.length} namespace files\n`);
+  } else {
+    console.log('✓ Translation structure is already synchronized\n');
   }
 
   // Step 3: Validate translations

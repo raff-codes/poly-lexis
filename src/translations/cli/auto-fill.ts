@@ -2,7 +2,7 @@ import * as path from 'node:path';
 import { DeepLTranslateProvider } from '../utils/deepl-translate-provider.js';
 import { GoogleTranslateProvider } from '../utils/google-translate-provider.js';
 import { getTranslationProvider, setTranslationProvider, translateText } from '../utils/translator.js';
-import { readTranslations, sortKeys, writeTranslation } from '../utils/utils.js';
+import { readTranslations, sortKeys, syncTranslationStructure, writeTranslation } from '../utils/utils.js';
 import { loadConfig } from './init.js';
 import { getMissingForLanguage } from './validate.js';
 
@@ -55,6 +55,14 @@ export async function autoFillTranslations(
     ? [options.language]
     : config.languages.filter((lang) => lang !== config.sourceLanguage);
 
+  // Sync structure before auto-filling to ensure all files exist
+  console.log('🔄 Synchronizing translation structure...');
+  const syncResult = syncTranslationStructure(translationsPath, config.languages, config.sourceLanguage);
+
+  if (syncResult.createdFiles.length > 0) {
+    console.log(`Created ${syncResult.createdFiles.length} namespace files\n`);
+  }
+
   console.log('=====');
   console.log('Auto-filling translations');
   console.log('=====');
@@ -77,7 +85,7 @@ export async function autoFillTranslations(
     // Get missing and empty translations for this language
     const missing = getMissingForLanguage(projectRoot, language);
 
-    if (missing.length === 0) {
+    if (!missing.length) {
       console.log('  No missing or empty translations');
       continue;
     }
