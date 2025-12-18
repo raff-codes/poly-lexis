@@ -13,11 +13,7 @@
       "type": "string",
       "description": "Path to the translations directory relative to project root",
       "default": "public/static/locales",
-      "examples": [
-        "public/static/locales",
-        "src/locales",
-        "locales"
-      ]
+      "examples": ["public/static/locales", "src/locales", "locales"]
     },
     "languages": {
       "type": "array",
@@ -147,9 +143,7 @@
       },
       "minItems": 1,
       "uniqueItems": true,
-      "default": [
-        "en"
-      ]
+      "default": ["en"]
     },
     "sourceLanguage": {
       "type": "string",
@@ -280,25 +274,15 @@
       "type": "string",
       "description": "Path to output TypeScript types file",
       "default": "src/types/i18nTypes.ts",
-      "examples": [
-        "src/types/i18nTypes.ts",
-        "src/types/translations.ts"
-      ]
+      "examples": ["src/types/i18nTypes.ts", "src/types/translations.ts"]
     },
     "provider": {
       "type": "string",
       "description": "Translation provider to use (deepl or google)",
-      "enum": [
-        "deepl",
-        "google"
-      ],
+      "enum": ["deepl", "google"],
       "default": "deepl"
     }
   },
-  "required": [
-    "translationsPath",
-    "languages",
-    "sourceLanguage"
-  ],
+  "required": ["translationsPath", "languages", "sourceLanguage"],
   "additionalProperties": false
 }

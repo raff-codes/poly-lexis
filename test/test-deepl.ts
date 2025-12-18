@@ -86,11 +86,7 @@ async function testDeepLProvider() {
   console.log('Test 4: Batch translation');
   console.log('─'.repeat(50));
   try {
-    const texts = [
-      'Good morning',
-      'Good afternoon',
-      'Good evening'
-    ];
+    const texts = ['Good morning', 'Good afternoon', 'Good evening'];
 
     console.log('✅ Translating 3 texts to German...');
     const results4 = await provider.translateBatch(

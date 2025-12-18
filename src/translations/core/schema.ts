@@ -257,10 +257,7 @@ export function isValidGoogleLanguage(lang: string): lang is GoogleLanguage {
 /**
  * Validate if a language is supported by a specific provider
  */
-export function isValidLanguageForProvider(
-  lang: string,
-  provider: TranslationProviderType
-): boolean {
+export function isValidLanguageForProvider(lang: string, provider: TranslationProviderType): boolean {
   switch (provider) {
     case 'deepl':
       return isValidDeepLLanguage(lang);

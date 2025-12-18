@@ -69,9 +69,7 @@ export class DeepLTranslateProvider implements TranslationProvider {
   }
 
   private getApiEndpoint(): string {
-    return this.isFreeApi
-      ? 'https://api-free.deepl.com/v2/translate'
-      : 'https://api.deepl.com/v2/translate';
+    return this.isFreeApi ? 'https://api-free.deepl.com/v2/translate' : 'https://api.deepl.com/v2/translate';
   }
 
   async translate(options: TranslateOptions): Promise<string> {
@@ -96,7 +94,7 @@ export class DeepLTranslateProvider implements TranslationProvider {
     const response = await fetch(this.getApiEndpoint(), {
       method: 'POST',
       headers: {
-        'Authorization': `DeepL-Auth-Key ${apiKey}`,
+        Authorization: `DeepL-Auth-Key ${apiKey}`,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify(body)
@@ -104,9 +102,7 @@ export class DeepLTranslateProvider implements TranslationProvider {
 
     if (!response.ok) {
       const errorData = (await response.json().catch(() => ({}))) as DeepLErrorResponse;
-      throw new Error(
-        `DeepL API error: ${errorData.message || response.statusText} (${response.status})`
-      );
+      throw new Error(`DeepL API error: ${errorData.message || response.statusText} (${response.status})`);
     }
 
     const data = (await response.json()) as DeepLTranslateResponse;
