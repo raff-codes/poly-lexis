@@ -1,118 +1,148 @@
 /**
- * Supported language codes for translations
- * Based on Google Translate API supported languages (ISO 639-1 and regional variants)
- * Complete list of all languages supported by Google Cloud Translation API
+ * Translation provider types
  */
-export const SUPPORTED_LANGUAGES = [
+export const TRANSLATION_PROVIDERS = ['deepl', 'google'] as const;
+export type TranslationProvider = (typeof TRANSLATION_PROVIDERS)[number];
+
+/**
+ * DeepL supported target languages
+ * Based on DeepL API v2 documentation
+ */
+export const DEEPL_LANGUAGES = [
+  'ar', // Arabic
+  'bg', // Bulgarian
+  'cs', // Czech
+  'da', // Danish
+  'de', // German
+  'el', // Greek
+  'en', // English (unspecified)
+  'en_gb', // English (British)
+  'en_us', // English (American)
+  'es', // Spanish
+  'es_419', // Spanish (Latin American)
+  'et', // Estonian
+  'fi', // Finnish
+  'fr', // French
+  'he', // Hebrew (next-gen models only)
+  'hu', // Hungarian
+  'id', // Indonesian
+  'it', // Italian
+  'ja', // Japanese
+  'ko', // Korean
+  'lt', // Lithuanian
+  'lv', // Latvian
+  'nb', // Norwegian Bokmål
+  'nl', // Dutch
+  'pl', // Polish
+  'pt', // Portuguese (unspecified)
+  'pt_br', // Portuguese (Brazilian)
+  'pt_pt', // Portuguese (excluding Brazilian)
+  'ro', // Romanian
+  'ru', // Russian
+  'sk', // Slovak
+  'sl', // Slovenian
+  'sv', // Swedish
+  'th', // Thai (next-gen models only)
+  'tr', // Turkish
+  'uk', // Ukrainian
+  'vi', // Vietnamese (next-gen models only)
+  'zh', // Chinese (unspecified)
+  'zh_hans', // Chinese (simplified)
+  'zh_hant' // Chinese (traditional)
+] as const;
+
+/**
+ * Google Translate supported languages
+ * Based on Google Cloud Translation API v2
+ * Reference: https://docs.cloud.google.com/translate/docs/languages
+ */
+export const GOOGLE_LANGUAGES = [
   'af', // Afrikaans
   'sq', // Albanian
   'am', // Amharic
   'ar', // Arabic
   'hy', // Armenian
-  'as', // Assamese
-  'ay', // Aymara
   'az', // Azerbaijani
-  'bm', // Bambara
   'eu', // Basque
   'be', // Belarusian
   'bn', // Bengali
-  'bho', // Bhojpuri
   'bs', // Bosnian
   'bg', // Bulgarian
   'ca', // Catalan
   'ceb', // Cebuano
-  'ny', // Chichewa
-  'zh', // Chinese (Simplified) - Google uses 'zh' or 'zh-CN'
-  'zh_cn', // Chinese (Simplified) - alternative format
+  'zh', // Chinese (Simplified)
+  'zh_cn', // Chinese (Simplified)
   'zh_tw', // Chinese (Traditional)
-  'zh_hk', // Chinese (Hong Kong)
   'co', // Corsican
   'hr', // Croatian
   'cs', // Czech
   'da', // Danish
-  'dv', // Dhivehi
-  'doi', // Dogri
   'nl', // Dutch
   'en', // English
   'eo', // Esperanto
   'et', // Estonian
-  'ee', // Ewe
-  'tl', // Filipino (Tagalog)
   'fi', // Finnish
   'fr', // French
+  'fy', // Frisian
   'gl', // Galician
   'ka', // Georgian
   'de', // German
-  'de_at', // German (Austria)
   'el', // Greek
-  'gn', // Guarani
   'gu', // Gujarati
   'ht', // Haitian Creole
   'ha', // Hausa
   'haw', // Hawaiian
-  'iw', // Hebrew (legacy code, 'he' is preferred)
   'he', // Hebrew
   'hi', // Hindi
   'hmn', // Hmong
   'hu', // Hungarian
   'is', // Icelandic
   'ig', // Igbo
-  'ilo', // Ilocano
   'id', // Indonesian
   'ga', // Irish
   'it', // Italian
   'ja', // Japanese
-  'jw', // Javanese
+  'jv', // Javanese
   'kn', // Kannada
   'kk', // Kazakh
   'km', // Khmer
   'rw', // Kinyarwanda
-  'gom', // Konkani
   'ko', // Korean
-  'kri', // Krio
-  'ku', // Kurdish (Kurmanji)
-  'ckb', // Kurdish (Sorani)
+  'ku', // Kurdish
   'ky', // Kyrgyz
   'lo', // Lao
   'la', // Latin
   'lv', // Latvian
-  'ln', // Lingala
   'lt', // Lithuanian
-  'lg', // Luganda
   'lb', // Luxembourgish
   'mk', // Macedonian
-  'mai', // Maithili
   'mg', // Malagasy
   'ms', // Malay
   'ml', // Malayalam
   'mt', // Maltese
   'mi', // Maori
   'mr', // Marathi
-  'mni', // Meiteilon (Manipuri)
-  'lus', // Mizo
   'mn', // Mongolian
   'my', // Myanmar (Burmese)
   'ne', // Nepali
   'no', // Norwegian
-  'or', // Odia
-  'om', // Oromo
+  'ny', // Nyanja (Chichewa)
+  'or', // Odia (Oriya)
   'ps', // Pashto
   'fa', // Persian
   'pl', // Polish
   'pt', // Portuguese
   'pt_br', // Portuguese (Brazil)
   'pa', // Punjabi
-  'qu', // Quechua
   'ro', // Romanian
   'ru', // Russian
   'sm', // Samoan
-  'sa', // Sanskrit
-  'gd', // Scottish Gaelic
+  'gd', // Scots Gaelic
   'sr', // Serbian
   'st', // Sesotho
   'sn', // Shona
   'sd', // Sindhi
-  'si', // Sinhala
+  'si', // Sinhala (Sinhalese)
   'sk', // Slovak
   'sl', // Slovenian
   'so', // Somali
@@ -120,16 +150,14 @@ export const SUPPORTED_LANGUAGES = [
   'su', // Sundanese
   'sw', // Swahili
   'sv', // Swedish
+  'tl', // Tagalog (Filipino)
   'tg', // Tajik
   'ta', // Tamil
   'tt', // Tatar
   'te', // Telugu
   'th', // Thai
-  'ti', // Tigrinya
-  'ts', // Tsonga
   'tr', // Turkish
   'tk', // Turkmen
-  'ak', // Twi
   'uk', // Ukrainian
   'ur', // Urdu
   'ug', // Uyghur
@@ -142,6 +170,15 @@ export const SUPPORTED_LANGUAGES = [
   'zu' // Zulu
 ] as const;
 
+/**
+ * All supported language codes (union of DeepL and Google Translate)
+ */
+export const SUPPORTED_LANGUAGES = Array.from(
+  new Set([...DEEPL_LANGUAGES, ...GOOGLE_LANGUAGES])
+).sort() as readonly string[];
+
+export type DeepLLanguage = (typeof DEEPL_LANGUAGES)[number];
+export type GoogleLanguage = (typeof GOOGLE_LANGUAGES)[number];
 export type SupportedLanguage = (typeof SUPPORTED_LANGUAGES)[number];
 
 /**
@@ -178,6 +215,12 @@ export const TRANSLATION_CONFIG_SCHEMA = {
       type: 'string',
       description: 'Path to output TypeScript types file',
       default: 'src/types/i18nTypes.ts'
+    },
+    provider: {
+      type: 'string',
+      description: 'Translation provider to use (deepl or google)',
+      enum: TRANSLATION_PROVIDERS,
+      default: 'deepl'
     }
   },
   required: ['translationsPath', 'languages', 'sourceLanguage'],
@@ -192,6 +235,37 @@ export function isValidLanguage(lang: string): lang is SupportedLanguage {
 }
 
 /**
+ * Validate if a language is supported by DeepL
+ */
+export function isValidDeepLLanguage(lang: string): lang is DeepLLanguage {
+  return DEEPL_LANGUAGES.includes(lang as DeepLLanguage);
+}
+
+/**
+ * Validate if a language is supported by Google Translate
+ */
+export function isValidGoogleLanguage(lang: string): lang is GoogleLanguage {
+  return GOOGLE_LANGUAGES.includes(lang as GoogleLanguage);
+}
+
+/**
+ * Validate if a language is supported by a specific provider
+ */
+export function isValidLanguageForProvider(
+  lang: string,
+  provider: TranslationProvider
+): boolean {
+  switch (provider) {
+    case 'deepl':
+      return isValidDeepLLanguage(lang);
+    case 'google':
+      return isValidGoogleLanguage(lang);
+    default:
+      return false;
+  }
+}
+
+/**
  * Validate languages array
  */
 export function validateLanguages(languages: string[]): {
@@ -203,4 +277,35 @@ export function validateLanguages(languages: string[]): {
     valid: invalid.length === 0,
     invalid
   };
+}
+
+/**
+ * Validate languages array for a specific provider
+ */
+export function validateLanguagesForProvider(
+  languages: string[],
+  provider: TranslationProvider
+): {
+  valid: boolean;
+  invalid: string[];
+} {
+  const invalid = languages.filter((lang) => !isValidLanguageForProvider(lang, provider));
+  return {
+    valid: invalid.length === 0,
+    invalid
+  };
+}
+
+/**
+ * Get supported languages for a specific provider
+ */
+export function getSupportedLanguages(provider: TranslationProvider): readonly string[] {
+  switch (provider) {
+    case 'deepl':
+      return DEEPL_LANGUAGES;
+    case 'google':
+      return GOOGLE_LANGUAGES;
+    default:
+      return [];
+  }
 }
