@@ -1,5 +1,11 @@
 # poly-lexis
 
+## 0.4.1
+
+### Patch Changes
+
+- Fix issues with library binary being under lexis instead of poly-lexis
+
 ## 0.4.0
 
 ### Minor Changes

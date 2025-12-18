@@ -5,7 +5,7 @@
  * Replace the API calls with your translation service of choice.
  */
 
-import type { TranslateOptions, TranslationProvider } from 'lexis';
+import type { TranslateOptions, TranslationProvider } from 'poly-lexis';
 
 export class CustomTranslationProvider implements TranslationProvider {
   private apiKey: string;
@@ -135,7 +135,7 @@ export class CustomTranslationProvider implements TranslationProvider {
 /**
  * Usage Example:
  *
- * import { setTranslationProvider } from 'lexis';
+ * import { setTranslationProvider } from 'poly-lexis';
  * import { CustomTranslationProvider } from './custom-provider';
  *
  * // Set your custom provider

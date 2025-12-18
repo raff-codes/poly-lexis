@@ -50,7 +50,7 @@ const translatedText = data.translated_text; // Adjust based on your API
 ### Step 3: Use Your Provider
 
 ```typescript
-import { setTranslationProvider } from 'lexis';
+import { setTranslationProvider } from 'poly-lexis';
 import { MyTranslationProvider } from './src/my-translation-provider';
 
 // Activate your provider
@@ -121,7 +121,7 @@ if (delayMs > 0) {
 ### Option 1: Direct Usage
 
 ```typescript
-import { setTranslationProvider } from 'lexis';
+import { setTranslationProvider } from 'poly-lexis';
 import { MyProvider } from './my-provider';
 
 setTranslationProvider(new MyProvider());
@@ -132,7 +132,7 @@ setTranslationProvider(new MyProvider());
 Create `scripts/setup-translator.ts`:
 
 ```typescript
-import { setTranslationProvider } from 'lexis';
+import { setTranslationProvider } from 'poly-lexis';
 import { MyProvider } from '../src/my-provider';
 
 const apiKey = process.env.MY_TRANSLATION_API_KEY;
@@ -144,7 +144,7 @@ Run before translation commands:
 ```json
 {
   "scripts": {
-    "translate": "tsx scripts/setup-translator.ts && lexis --auto-fill"
+    "translate": "tsx scripts/setup-translator.ts && poly-lexis --auto-fill"
   }
 }
 ```
@@ -152,7 +152,7 @@ Run before translation commands:
 ### Option 3: Conditional Provider
 
 ```typescript
-import { setTranslationProvider } from 'lexis';
+import { setTranslationProvider } from 'poly-lexis';
 import { MyProvider } from './my-provider';
 
 // Use custom provider in production, Google Translate in dev
@@ -247,7 +247,7 @@ console.log(results);
 To go back to Google Translate:
 
 ```typescript
-import { resetTranslationProvider } from 'lexis';
+import { resetTranslationProvider } from 'poly-lexis';
 
 resetTranslationProvider();
 ```

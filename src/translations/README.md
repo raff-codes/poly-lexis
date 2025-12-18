@@ -292,7 +292,7 @@ You can easily plug in your own custom translation provider by implementing the 
 Implement the `TranslationProvider` interface:
 
 ```typescript
-import type { TranslationProvider, TranslateOptions } from 'lexis';
+import type { TranslationProvider, TranslateOptions } from 'poly-lexis';
 
 export class MyCustomProvider implements TranslationProvider {
   async translate(options: TranslateOptions): Promise<string> {
@@ -376,7 +376,7 @@ export class MyCustomProvider implements TranslationProvider {
 ### Using Your Custom Provider
 
 ```typescript
-import { setTranslationProvider } from 'lexis';
+import { setTranslationProvider } from 'poly-lexis';
 import { MyCustomProvider } from './my-custom-provider';
 
 // Set your custom provider

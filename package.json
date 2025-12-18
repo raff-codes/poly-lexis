@@ -1,6 +1,6 @@
 {
   "name": "poly-lexis",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "A powerful CLI and library for managing i18n translations with validation, auto-translation, and TypeScript type generation",
   "private": false,
   "type": "module",
@@ -17,7 +17,7 @@
     }
   },
   "bin": {
-    "lexis": "dist/cli/translations.js"
+    "poly-lexis": "dist/cli/translations.js"
   },
   "scripts": {
     "build": "tsup && node dist/scripts/generate-schema.js && mkdir -p dist/translations/core && cp src/translations/core/translations-config.schema.json dist/translations/core/",
