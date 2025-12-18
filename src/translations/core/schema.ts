@@ -227,6 +227,11 @@ export const TRANSLATION_CONFIG_SCHEMA = {
       description: 'Translation provider to use (deepl or google)',
       enum: TRANSLATION_PROVIDERS,
       default: 'deepl'
+    },
+    useFallbackLanguages: {
+      type: 'boolean',
+      description: 'Enable automatic language fallback for unsupported regional variants (e.g., de_at -> de)',
+      default: false
     }
   },
   required: ['translationsPath', 'languages', 'sourceLanguage'],

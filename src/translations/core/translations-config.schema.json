@@ -281,6 +281,11 @@
       "description": "Translation provider to use (deepl or google)",
       "enum": ["deepl", "google"],
       "default": "deepl"
+    },
+    "useFallbackLanguages": {
+      "type": "boolean",
+      "description": "Enable automatic language fallback for unsupported regional variants (e.g., de_at -> de)",
+      "default": true
     }
   },
   "required": ["translationsPath", "languages", "sourceLanguage"],

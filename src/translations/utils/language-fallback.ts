@@ -100,17 +100,28 @@ export interface LanguageFallbackResult {
  *
  * @param language - Original language code requested
  * @param provider - Translation provider type ('deepl' or 'google')
+ * @param enableFallback - Whether to enable fallback logic (default: true)
  * @returns LanguageFallbackResult with resolved language and metadata
  */
 export function resolveLanguageWithFallback(
   language: string,
-  provider: TranslationProviderType
+  provider: TranslationProviderType,
+  enableFallback = true
 ): LanguageFallbackResult {
   const normalizedLanguage = language.toLowerCase();
   const supportedLanguages = getSupportedLanguagesForProvider(provider);
 
   // Check if the original language is supported
   if (isLanguageSupported(normalizedLanguage, supportedLanguages)) {
+    return {
+      resolvedLanguage: normalizedLanguage,
+      usedFallback: false,
+      originalLanguage: language
+    };
+  }
+
+  // If fallback is disabled, return original language
+  if (!enableFallback) {
     return {
       resolvedLanguage: normalizedLanguage,
       usedFallback: false,

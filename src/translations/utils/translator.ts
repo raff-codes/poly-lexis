@@ -46,20 +46,23 @@ export function resetTranslationProvider(): void {
  * @param targetLang - Target language code
  * @param sourceLang - Source language code (default: "en")
  * @param apiKey - API key for the translation service
+ * @param useFallbackLanguages - Enable automatic language fallback (default: true)
  * @returns Promise resolving to translated text
  */
 export async function translateText(
   text: string,
   targetLang: string,
   sourceLang: string = 'en',
-  apiKey?: string
+  apiKey?: string,
+  useFallbackLanguages = true
 ): Promise<string> {
   const provider = getTranslationProvider();
   return provider.translate({
     text,
     sourceLang,
     targetLang,
-    apiKey
+    apiKey,
+    useFallbackLanguages
   });
 }
 

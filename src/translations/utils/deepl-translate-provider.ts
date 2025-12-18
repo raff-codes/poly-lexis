@@ -74,7 +74,7 @@ export class DeepLTranslateProvider implements TranslationProvider {
   }
 
   async translate(options: TranslateOptions): Promise<string> {
-    const { text, sourceLang, targetLang, apiKey } = options;
+    const { text, sourceLang, targetLang, apiKey, useFallbackLanguages = true } = options;
 
     if (!apiKey) {
       throw new Error(
@@ -83,13 +83,13 @@ export class DeepLTranslateProvider implements TranslationProvider {
     }
 
     // Resolve target language with fallback
-    const targetLangResult = resolveLanguageWithFallback(targetLang, 'deepl');
+    const targetLangResult = resolveLanguageWithFallback(targetLang, 'deepl', useFallbackLanguages);
     logLanguageFallback(targetLangResult, 'deepl');
 
     // Resolve source language with fallback (if provided)
     let resolvedSourceLang: string | undefined;
     if (sourceLang) {
-      const sourceLangResult = resolveLanguageWithFallback(sourceLang, 'deepl');
+      const sourceLangResult = resolveLanguageWithFallback(sourceLang, 'deepl', useFallbackLanguages);
       logLanguageFallback(sourceLangResult, 'deepl');
       resolvedSourceLang = sourceLangResult.resolvedLanguage;
     }

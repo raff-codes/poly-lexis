@@ -15,6 +15,8 @@ export interface TranslateOptions {
   targetLang: string;
   /** API key or credentials (optional, depending on provider) */
   apiKey?: string;
+  /** Enable automatic language fallback for unsupported regional variants (default: true) */
+  useFallbackLanguages?: boolean;
   /** Additional provider-specific options */
   [key: string]: unknown;
 }

@@ -104,7 +104,13 @@ export async function autoFillTranslations(
         console.log(`    EN: "${item.sourceValue}"`);
 
         // Translate the text
-        const translated = await translateText(item.sourceValue, language, config.sourceLanguage, apiKey);
+        const translated = await translateText(
+          item.sourceValue,
+          language,
+          config.sourceLanguage,
+          apiKey,
+          config.useFallbackLanguages ?? true
+        );
         console.log(`    ${language.toUpperCase()}: "${translated}"`);
 
         if (!dryRun) {
@@ -193,7 +199,13 @@ export async function fillNamespace(
     }
 
     console.log(`  Translating ${key}...`);
-    const translated = await translateText(sourceValue, language, config.sourceLanguage, apiKey);
+    const translated = await translateText(
+      sourceValue,
+      language,
+      config.sourceLanguage,
+      apiKey,
+      config.useFallbackLanguages ?? true
+    );
     targetKeys[key] = translated;
     count++;
 

@@ -11,6 +11,8 @@ export interface TranslationConfig {
   typesOutputPath?: string;
   /** Translation provider to use (default: 'deepl') */
   provider?: TranslationProviderType;
+  /** Enable automatic language fallback for unsupported regional variants (default: true) */
+  useFallbackLanguages?: boolean;
 }
 
 export interface TranslationEntry {
@@ -45,7 +47,8 @@ export const DEFAULT_CONFIG: Required<TranslationConfig> = {
   languages: ['en'],
   sourceLanguage: 'en',
   typesOutputPath: 'src/types/i18nTypes.ts',
-  provider: 'google'
+  provider: 'google',
+  useFallbackLanguages: true
 };
 
 export const DEFAULT_LANGUAGES = ['en', 'fr', 'it', 'pl', 'es', 'pt', 'de', 'nl', 'sv', 'hu', 'cs', 'ja'] as const;

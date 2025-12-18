@@ -56,7 +56,7 @@ function restoreVariables(text: string, variableMap: Map<string, string>): strin
  */
 export class GoogleTranslateProvider implements TranslationProvider {
   async translate(options: TranslateOptions): Promise<string> {
-    const { text, sourceLang, targetLang, apiKey } = options;
+    const { text, sourceLang, targetLang, apiKey, useFallbackLanguages = true } = options;
 
     if (!apiKey) {
       throw new Error(
@@ -65,13 +65,13 @@ export class GoogleTranslateProvider implements TranslationProvider {
     }
 
     // Resolve target language with fallback
-    const targetLangResult = resolveLanguageWithFallback(targetLang, 'google');
+    const targetLangResult = resolveLanguageWithFallback(targetLang, 'google', useFallbackLanguages);
     logLanguageFallback(targetLangResult, 'google');
 
     // Resolve source language with fallback (if provided)
     let resolvedSourceLang: string | undefined;
     if (sourceLang) {
-      const sourceLangResult = resolveLanguageWithFallback(sourceLang, 'google');
+      const sourceLangResult = resolveLanguageWithFallback(sourceLang, 'google', useFallbackLanguages);
       logLanguageFallback(sourceLangResult, 'google');
       resolvedSourceLang = sourceLangResult.resolvedLanguage;
     }
