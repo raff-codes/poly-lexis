@@ -113,7 +113,7 @@ export function initTranslations(projectRoot: string, config: TranslationConfig 
   const configPath = path.join(projectRoot, '.translationsrc.json');
   if (!fs.existsSync(configPath)) {
     const configContent = {
-      $schema: './node_modules/@repo/env-scripts/dist/translations/core/translations-config.schema.json',
+      $schema: './node_modules/poly-lexis/dist/translations/core/translations-config.schema.json',
       translationsPath: finalConfig.translationsPath,
       languages,
       sourceLanguage,
