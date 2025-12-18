@@ -47,7 +47,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": ""
+    "url": "https://github.com/designedhead/poly-lexis"
   },
   "publishConfig": {
     "access": "public"
