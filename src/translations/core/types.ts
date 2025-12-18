@@ -48,19 +48,4 @@ export const DEFAULT_CONFIG: Required<TranslationConfig> = {
   provider: 'google'
 };
 
-export const DEFAULT_LANGUAGES = [
-  'en',
-  'fr',
-  'it',
-  'pl',
-  'es',
-  'pt',
-  'de',
-  'de_at',
-  'nl',
-  'sv',
-  'hu',
-  'cs',
-  'ja',
-  'zh_hk'
-] as const;
+export const DEFAULT_LANGUAGES = ['en', 'fr', 'it', 'pl', 'es', 'pt', 'de', 'nl', 'sv', 'hu', 'cs', 'ja'] as const;

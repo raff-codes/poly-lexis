@@ -3,6 +3,7 @@
  * Uses DeepL Translation API v2
  */
 
+import { logLanguageFallback, resolveLanguageWithFallback } from './language-fallback.js';
 import type { TranslateOptions, TranslationProvider } from './translator-interface';
 
 interface DeepLTranslateResponse {
@@ -81,14 +82,26 @@ export class DeepLTranslateProvider implements TranslationProvider {
       );
     }
 
+    // Resolve target language with fallback
+    const targetLangResult = resolveLanguageWithFallback(targetLang, 'deepl');
+    logLanguageFallback(targetLangResult, 'deepl');
+
+    // Resolve source language with fallback (if provided)
+    let resolvedSourceLang: string | undefined;
+    if (sourceLang) {
+      const sourceLangResult = resolveLanguageWithFallback(sourceLang, 'deepl');
+      logLanguageFallback(sourceLangResult, 'deepl');
+      resolvedSourceLang = sourceLangResult.resolvedLanguage;
+    }
+
     // Extract and preserve interpolation variables
     const { textWithPlaceholders, variableMap } = preserveVariables(text);
 
     // Prepare request body
     const body = {
       text: [textWithPlaceholders],
-      target_lang: normalizeLanguageCode(targetLang),
-      ...(sourceLang && { source_lang: normalizeLanguageCode(sourceLang) })
+      target_lang: normalizeLanguageCode(targetLangResult.resolvedLanguage),
+      ...(resolvedSourceLang && { source_lang: normalizeLanguageCode(resolvedSourceLang) })
     };
 
     const response = await fetch(this.getApiEndpoint(), {

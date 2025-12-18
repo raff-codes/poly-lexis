@@ -312,3 +312,13 @@ export function getSupportedLanguages(provider: TranslationProviderType): readon
       return [];
   }
 }
+
+/**
+ * Re-export language fallback utilities for convenience
+ */
+export {
+  getFallbackMappings,
+  type LanguageFallbackResult,
+  logLanguageFallback,
+  resolveLanguageWithFallback
+} from '../utils/language-fallback.js';

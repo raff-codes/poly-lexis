@@ -3,6 +3,7 @@
  * Uses Google Cloud Translation API v2
  */
 
+import { logLanguageFallback, resolveLanguageWithFallback } from './language-fallback.js';
 import type { TranslateOptions, TranslationProvider } from './translator-interface';
 
 interface GoogleTranslateResponse {
@@ -63,11 +64,31 @@ export class GoogleTranslateProvider implements TranslationProvider {
       );
     }
 
+    // Resolve target language with fallback
+    const targetLangResult = resolveLanguageWithFallback(targetLang, 'google');
+    logLanguageFallback(targetLangResult, 'google');
+
+    // Resolve source language with fallback (if provided)
+    let resolvedSourceLang: string | undefined;
+    if (sourceLang) {
+      const sourceLangResult = resolveLanguageWithFallback(sourceLang, 'google');
+      logLanguageFallback(sourceLangResult, 'google');
+      resolvedSourceLang = sourceLangResult.resolvedLanguage;
+    }
+
     // Extract and preserve interpolation variables
     const { textWithPlaceholders, variableMap } = preserveVariables(text);
 
     // Translate the text with placeholders
     const url = `https://translation.googleapis.com/language/translate/v2?key=${apiKey}`;
+
+    // For Google Translate, use base language code (before underscore) for regional variants
+    // e.g., 'pt_br' -> 'pt', but keep the full code if it's in the supported list
+    const sourceForGoogle = resolvedSourceLang?.includes('_') ? resolvedSourceLang.split('_')[0] : resolvedSourceLang;
+
+    const targetForGoogle = targetLangResult.resolvedLanguage.includes('_')
+      ? targetLangResult.resolvedLanguage.split('_')[0]
+      : targetLangResult.resolvedLanguage;
 
     const response = await fetch(url, {
       method: 'POST',
@@ -76,8 +97,8 @@ export class GoogleTranslateProvider implements TranslationProvider {
       },
       body: JSON.stringify({
         q: textWithPlaceholders,
-        source: sourceLang,
-        target: targetLang.split('_')[0], // Convert 'pt_BR' to 'pt'
+        source: sourceForGoogle,
+        target: targetForGoogle,
         format: 'text'
       })
     });
