@@ -1,5 +1,11 @@
 # poly-lexis
 
+## 0.4.3
+
+### Patch Changes
+
+- regenerate types on new key submition
+
 ## 0.4.2
 
 ### Patch Changes

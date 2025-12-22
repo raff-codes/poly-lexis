@@ -4,6 +4,7 @@ import { DeepLTranslateProvider } from '../utils/deepl-translate-provider.js';
 import { GoogleTranslateProvider } from '../utils/google-translate-provider.js';
 import { getTranslationProvider, setTranslationProvider, translateText } from '../utils/translator.js';
 import { readTranslations, sortKeys, writeTranslation } from '../utils/utils.js';
+import { generateTranslationTypes } from './generate-types.js';
 import { loadConfig } from './init.js';
 
 interface AddKeyOptions {
@@ -127,6 +128,14 @@ export async function addTranslationKey(projectRoot: string, options: AddKeyOpti
   console.log('=====');
   console.log('Translation key added successfully!');
   console.log('=====');
+
+  // Automatically generate types
+  console.log('\nRegenerating TypeScript types...');
+  try {
+    generateTranslationTypes(projectRoot);
+  } catch (error) {
+    console.error('Failed to generate types:', error instanceof Error ? error.message : 'Unknown error');
+  }
 }
 
 /**
