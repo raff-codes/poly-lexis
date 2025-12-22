@@ -1,6 +1,8 @@
 import * as path from 'node:path';
 import type { TranslationEntry } from '../core/types.js';
-import { translateText } from '../utils/translator.js';
+import { DeepLTranslateProvider } from '../utils/deepl-translate-provider.js';
+import { GoogleTranslateProvider } from '../utils/google-translate-provider.js';
+import { getTranslationProvider, setTranslationProvider, translateText } from '../utils/translator.js';
 import { readTranslations, sortKeys, writeTranslation } from '../utils/utils.js';
 import { loadConfig } from './init.js';
 
@@ -13,7 +15,7 @@ interface AddKeyOptions {
   value: string;
   /** Auto-translate to all languages */
   autoTranslate?: boolean;
-  /** Google Translate API key */
+  /** Translation API key (DeepL or Google Translate) */
   apiKey?: string;
 }
 
@@ -24,6 +26,20 @@ export async function addTranslationKey(projectRoot: string, options: AddKeyOpti
   const config = loadConfig(projectRoot);
   const translationsPath = path.join(projectRoot, config.translationsPath);
   const { namespace, key, value, autoTranslate = false, apiKey } = options;
+
+  // Set up the translation provider based on config (only if not already set by user)
+  const currentProvider = getTranslationProvider();
+  const isDefaultGoogleProvider = currentProvider.constructor.name === 'GoogleTranslateProvider';
+
+  // Only set provider if user hasn't already set a custom one
+  if (isDefaultGoogleProvider) {
+    const provider = config.provider || 'deepl';
+    if (provider === 'deepl') {
+      setTranslationProvider(new DeepLTranslateProvider());
+    } else {
+      setTranslationProvider(new GoogleTranslateProvider());
+    }
+  }
 
   console.log('=====');
   console.log('Adding translation key');
@@ -66,7 +82,7 @@ export async function addTranslationKey(projectRoot: string, options: AddKeyOpti
 
         // Only translate if key doesn't exist or is empty
         if (!targetTranslations[namespace][key] || targetTranslations[namespace][key].trim() === '') {
-          const translated = await translateText(value, lang, sourceLang, apiKey);
+          const translated = await translateText(value, lang, sourceLang, apiKey, config.useFallbackLanguages ?? true);
           targetTranslations[namespace][key] = translated;
           const sorted = sortKeys(targetTranslations[namespace]);
           writeTranslation(translationsPath, lang, namespace, sorted);

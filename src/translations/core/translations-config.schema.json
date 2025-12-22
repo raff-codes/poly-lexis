@@ -285,7 +285,7 @@
     "useFallbackLanguages": {
       "type": "boolean",
       "description": "Enable automatic language fallback for unsupported regional variants (e.g., de_at -> de)",
-      "default": true
+      "default": false
     }
   },
   "required": ["translationsPath", "languages", "sourceLanguage"],

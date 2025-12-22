@@ -47,7 +47,7 @@ export const DEFAULT_CONFIG: Required<TranslationConfig> = {
   languages: ['en'],
   sourceLanguage: 'en',
   typesOutputPath: 'src/types/i18nTypes.ts',
-  provider: 'google',
+  provider: 'deepl',
   useFallbackLanguages: true
 };
 

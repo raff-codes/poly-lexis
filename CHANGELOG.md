@@ -1,5 +1,11 @@
 # poly-lexis
 
+## 0.4.2
+
+### Patch Changes
+
+- Fix translations not checking provider setup
+
 ## 0.4.1
 
 ### Patch Changes
