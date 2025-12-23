@@ -232,6 +232,22 @@ export const TRANSLATION_CONFIG_SCHEMA = {
       type: 'boolean',
       description: 'Enable automatic language fallback for unsupported regional variants (e.g., de_at -> de)',
       default: false
+    },
+    searchPaths: {
+      type: 'array',
+      description: 'Directories to search for translation key usage',
+      items: {
+        type: 'string'
+      },
+      default: ['src', 'app', 'pages', 'components']
+    },
+    searchExtensions: {
+      type: 'array',
+      description: 'File extensions to search for key usage',
+      items: {
+        type: 'string'
+      },
+      default: ['.ts', '.tsx', '.js', '.jsx', '.vue', '.svelte']
     }
   },
   required: ['translationsPath', 'languages', 'sourceLanguage'],

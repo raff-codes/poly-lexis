@@ -1,5 +1,12 @@
 # poly-lexis
 
+## 0.5.0
+
+### Minor Changes
+
+- d1f9b48: Remove orphaned keys outside of the main language
+- Find unsused translation keys in the project
+
 ## 0.4.3
 
 ### Patch Changes

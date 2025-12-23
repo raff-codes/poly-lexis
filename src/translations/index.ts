@@ -12,6 +12,7 @@
 // CLI commands
 export * from './cli/add-key.js';
 export * from './cli/auto-fill.js';
+export * from './cli/find-unused.js';
 export * from './cli/generate-types.js';
 export * from './cli/init.js';
 export * from './cli/init-interactive.js';

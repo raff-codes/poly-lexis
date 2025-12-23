@@ -66,6 +66,7 @@ auto-filling, and type generation based on your project's current state.
 Commands:
   (none)          Smart mode - validates, fills, and generates types
   add             Add a new translation key
+  find-unused     Find translation keys that are not used in the codebase
 
 Options (Smart Mode):
   -a, --auto-fill         Auto-fill missing translations with DeepL or Google Translate
@@ -111,6 +112,9 @@ Examples:
   # Add with auto-translation
   translations add -n common -k WELCOME -v "Welcome" --auto-fill
 
+  # Find unused translation keys
+  translations find-unused
+
 What happens in smart mode:
   1. Checks if translations are initialized (creates .translationsrc.json if needed)
   2. Validates all translations against source language
@@ -123,8 +127,24 @@ What happens in smart mode:
 
 const command = positionals[0];
 
+// Handle 'find-unused' command
+if (command === 'find-unused') {
+  (async () => {
+    try {
+      const { findUnusedKeys, printUnusedKeysResult } = await import('../translations/cli/find-unused.js');
+
+      console.log('\n🔍 Finding unused translation keys...\n');
+
+      const result = findUnusedKeys(process.cwd());
+      printUnusedKeysResult(result);
+    } catch (error) {
+      console.error('Error:', error instanceof Error ? error.message : error);
+      process.exit(1);
+    }
+  })();
+}
 // Handle 'add' command
-if (command === 'add') {
+else if (command === 'add') {
   // Interactive mode if no options provided
   if (!values.namespace && !values.key && !values.value) {
     (async () => {
@@ -345,6 +365,11 @@ if (command === 'add') {
               description: 'Check for missing or empty translations'
             },
             {
+              name: '🔎 Find unused keys',
+              value: 'find-unused',
+              description: 'Find translation keys not used in the codebase'
+            },
+            {
               name: '🤖 Auto-fill missing translations',
               value: 'autofill',
               description: 'Automatically translate missing keys with DeepL or Google Translate'
@@ -505,6 +530,10 @@ if (command === 'add') {
               apiKey
             });
           }
+        } else if (action === 'find-unused') {
+          const { findUnusedKeys, printUnusedKeysResult } = await import('../translations/cli/find-unused.js');
+          const result = findUnusedKeys(process.cwd());
+          printUnusedKeysResult(result);
         } else if (action === 'types') {
           console.log('📝 Generating TypeScript types...\n');
           const { generateTranslationTypes } = await import('../translations/cli/generate-types.js');
