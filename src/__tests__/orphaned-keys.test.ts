@@ -299,4 +299,167 @@ describe('Orphaned Keys Detection and Removal', () => {
       expect(frCommon).toEqual({ hello: 'Bonjour' });
     });
   });
+
+  describe('Orphaned Namespace Files', () => {
+    test('should detect and remove orphaned namespace files', () => {
+      // Setup: Create source with only 'common' namespace
+      writeTranslation(translationsPath, 'en', 'common', {
+        hello: 'Hello'
+      });
+
+      // Setup: Create target languages with both 'common' and 'test' namespaces
+      writeTranslation(translationsPath, 'fr', 'common', {
+        hello: 'Bonjour'
+      });
+      writeTranslation(translationsPath, 'fr', 'test', {
+        orphanedNamespace: 'This namespace does not exist in source'
+      });
+
+      writeTranslation(translationsPath, 'es', 'common', {
+        hello: 'Hola'
+      });
+      writeTranslation(translationsPath, 'es', 'test', {
+        orphanedNamespace: 'Este namespace no existe en el origen'
+      });
+
+      // Verify orphaned namespace files exist before sync
+      expect(fs.existsSync(path.join(translationsPath, 'fr', 'test.json'))).toBe(true);
+      expect(fs.existsSync(path.join(translationsPath, 'es', 'test.json'))).toBe(true);
+
+      // Execute sync
+      const syncResult = syncTranslationStructure(translationsPath, ['en', 'fr', 'es'], 'en');
+
+      // Assert: Should report removed namespaces
+      expect(syncResult.removedNamespaces).toHaveLength(2);
+      expect(syncResult.removedNamespaces).toContainEqual({
+        language: 'fr',
+        namespace: 'test',
+        path: path.join(translationsPath, 'fr', 'test.json')
+      });
+      expect(syncResult.removedNamespaces).toContainEqual({
+        language: 'es',
+        namespace: 'test',
+        path: path.join(translationsPath, 'es', 'test.json')
+      });
+
+      // Verify orphaned namespace files were removed
+      expect(fs.existsSync(path.join(translationsPath, 'fr', 'test.json'))).toBe(false);
+      expect(fs.existsSync(path.join(translationsPath, 'es', 'test.json'))).toBe(false);
+
+      // Verify 'common' namespace still exists
+      expect(fs.existsSync(path.join(translationsPath, 'fr', 'common.json'))).toBe(true);
+      expect(fs.existsSync(path.join(translationsPath, 'es', 'common.json'))).toBe(true);
+    });
+
+    test('should remove multiple orphaned namespace files from a single language', () => {
+      // Setup: Create source with only 'common' namespace
+      writeTranslation(translationsPath, 'en', 'common', {
+        hello: 'Hello'
+      });
+
+      // Setup: Create target with multiple orphaned namespaces
+      writeTranslation(translationsPath, 'fr', 'common', {
+        hello: 'Bonjour'
+      });
+      writeTranslation(translationsPath, 'fr', 'errors', {
+        notFound: 'Non trouvé'
+      });
+      writeTranslation(translationsPath, 'fr', 'forms', {
+        submit: 'Soumettre'
+      });
+
+      // Verify all files exist before sync
+      expect(fs.existsSync(path.join(translationsPath, 'fr', 'common.json'))).toBe(true);
+      expect(fs.existsSync(path.join(translationsPath, 'fr', 'errors.json'))).toBe(true);
+      expect(fs.existsSync(path.join(translationsPath, 'fr', 'forms.json'))).toBe(true);
+
+      // Execute sync
+      const syncResult = syncTranslationStructure(translationsPath, ['en', 'fr'], 'en');
+
+      // Assert: Should report removed namespaces
+      expect(syncResult.removedNamespaces).toHaveLength(2);
+
+      // Verify orphaned namespace files were removed
+      expect(fs.existsSync(path.join(translationsPath, 'fr', 'errors.json'))).toBe(false);
+      expect(fs.existsSync(path.join(translationsPath, 'fr', 'forms.json'))).toBe(false);
+
+      // Verify 'common' namespace still exists
+      expect(fs.existsSync(path.join(translationsPath, 'fr', 'common.json'))).toBe(true);
+    });
+
+    test('should not remove any files when all namespaces match source', () => {
+      // Setup: Create source with multiple namespaces
+      writeTranslation(translationsPath, 'en', 'common', {
+        hello: 'Hello'
+      });
+      writeTranslation(translationsPath, 'en', 'errors', {
+        notFound: 'Not found'
+      });
+
+      // Setup: Create target with matching namespaces
+      writeTranslation(translationsPath, 'fr', 'common', {
+        hello: 'Bonjour'
+      });
+      writeTranslation(translationsPath, 'fr', 'errors', {
+        notFound: 'Non trouvé'
+      });
+
+      // Execute sync
+      const syncResult = syncTranslationStructure(translationsPath, ['en', 'fr'], 'en');
+
+      // Assert: Should not remove any namespaces
+      expect(syncResult.removedNamespaces).toHaveLength(0);
+
+      // Verify all files still exist
+      expect(fs.existsSync(path.join(translationsPath, 'fr', 'common.json'))).toBe(true);
+      expect(fs.existsSync(path.join(translationsPath, 'fr', 'errors.json'))).toBe(true);
+    });
+
+    test('should handle removing orphaned namespaces and keys simultaneously', () => {
+      // Setup: Create source
+      writeTranslation(translationsPath, 'en', 'common', {
+        hello: 'Hello',
+        goodbye: 'Goodbye'
+      });
+
+      // Setup: Create target with orphaned namespace and orphaned keys
+      writeTranslation(translationsPath, 'fr', 'common', {
+        hello: 'Bonjour',
+        goodbye: 'Au revoir',
+        orphanedKey: 'Old key'
+      });
+      writeTranslation(translationsPath, 'fr', 'test', {
+        orphanedNamespace: 'Should be removed'
+      });
+
+      // Execute sync
+      const syncResult = syncTranslationStructure(translationsPath, ['en', 'fr'], 'en');
+
+      // Assert: Should report both removed namespaces and cleaned keys
+      expect(syncResult.removedNamespaces).toHaveLength(1);
+      expect(syncResult.removedNamespaces[0]).toEqual({
+        language: 'fr',
+        namespace: 'test',
+        path: path.join(translationsPath, 'fr', 'test.json')
+      });
+
+      expect(syncResult.cleanedKeys).toHaveLength(1);
+      expect(syncResult.cleanedKeys[0]).toEqual({
+        language: 'fr',
+        namespace: 'common',
+        key: 'orphanedKey'
+      });
+
+      // Verify orphaned namespace file was removed
+      expect(fs.existsSync(path.join(translationsPath, 'fr', 'test.json'))).toBe(false);
+
+      // Verify orphaned key was removed from common
+      const frCommon = JSON.parse(fs.readFileSync(path.join(translationsPath, 'fr', 'common.json'), 'utf-8'));
+      expect(frCommon.orphanedKey).toBeUndefined();
+      expect(frCommon).toEqual({
+        hello: 'Bonjour',
+        goodbye: 'Au revoir'
+      });
+    });
+  });
 });

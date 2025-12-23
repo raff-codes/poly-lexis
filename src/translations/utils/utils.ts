@@ -151,6 +151,7 @@ export interface SyncResult {
   createdFiles: Array<{ language: string; namespace: string; path: string }>;
   skippedFiles: Array<{ language: string; namespace: string; reason: string }>;
   cleanedKeys: Array<{ language: string; namespace: string; key: string }>;
+  removedNamespaces: Array<{ language: string; namespace: string; path: string }>;
 }
 
 /**
@@ -158,6 +159,7 @@ export interface SyncResult {
  * - Ensures all configured languages have folders
  * - Ensures all namespaces from source language exist in target languages
  * - Creates files with empty values matching source structure
+ * - Removes orphaned namespace files from target languages (namespaces not in source)
  * - Removes orphaned keys from target languages (keys not in source)
  */
 export function syncTranslationStructure(
@@ -169,7 +171,8 @@ export function syncTranslationStructure(
     createdFolders: [],
     createdFiles: [],
     skippedFiles: [],
-    cleanedKeys: []
+    cleanedKeys: [],
+    removedNamespaces: []
   };
 
   // 1. Ensure all language folders exist
@@ -190,7 +193,22 @@ export function syncTranslationStructure(
 
   for (const language of targetLanguages) {
     const targetTranslations = readTranslations(translationsPath, language);
+    const targetNamespaces = getNamespaces(translationsPath, language);
 
+    // 4.1. Remove orphaned namespace files (files that don't exist in source)
+    for (const namespace of targetNamespaces) {
+      if (!sourceNamespaces.includes(namespace)) {
+        const filePath = path.join(translationsPath, language, `${namespace}.json`);
+        fs.unlinkSync(filePath);
+        result.removedNamespaces.push({
+          language,
+          namespace,
+          path: filePath
+        });
+      }
+    }
+
+    // 4.2. Sync each source namespace
     for (const namespace of sourceNamespaces) {
       const filePath = path.join(translationsPath, language, `${namespace}.json`);
       const sourceFile = sourceTranslations[namespace] || {};

@@ -68,11 +68,19 @@ export async function manageTranslations(
     console.log(`✓ Created ${syncResult.createdFiles.length} namespace files\n`);
   }
 
+  if (syncResult.removedNamespaces.length > 0) {
+    console.log(`✓ Removed ${syncResult.removedNamespaces.length} orphaned namespace files\n`);
+  }
+
   if (syncResult.cleanedKeys.length > 0) {
     console.log(`✓ Removed ${syncResult.cleanedKeys.length} orphaned keys from translation files\n`);
   }
 
-  if (syncResult.createdFiles.length === 0 && syncResult.cleanedKeys.length === 0) {
+  if (
+    syncResult.createdFiles.length === 0 &&
+    syncResult.cleanedKeys.length === 0 &&
+    syncResult.removedNamespaces.length === 0
+  ) {
     console.log('✓ Translation structure is already synchronized\n');
   }
 
