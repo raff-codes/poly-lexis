@@ -36,10 +36,18 @@ export interface MissingTranslation {
   sourceValue: string;
 }
 
+export interface OrphanedTranslation {
+  namespace: string;
+  key: string;
+  language: string;
+  value: string;
+}
+
 export interface ValidationResult {
   valid: boolean;
   missing: MissingTranslation[];
   empty: MissingTranslation[];
+  orphaned: OrphanedTranslation[];
 }
 
 export const DEFAULT_CONFIG: Required<TranslationConfig> = {

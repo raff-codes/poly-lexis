@@ -15,7 +15,7 @@ function verifyTranslations(): void {
     if (!result.valid) {
       console.error('\n❌ Translation verification failed!');
       console.error(
-        `Found ${result.missing.length} missing translations and ${result.empty.length} empty translations.`
+        `Found ${result.missing.length} missing translations, ${result.empty.length} empty translations, and ${result.orphaned.length} orphaned translations.`
       );
       console.error('Please fix these issues before proceeding.\n');
       process.exit(1);

@@ -1,11 +1,11 @@
 import * as path from 'node:path';
-import type { MissingTranslation, ValidationResult } from '../core/types.js';
+import type { MissingTranslation, OrphanedTranslation, ValidationResult } from '../core/types.js';
 import { getNamespaces, readTranslations, syncTranslationStructure } from '../utils/utils.js';
 import { loadConfig } from './init.js';
 
 /**
  * Validate all translations against the source language
- * Checks for missing keys and empty values
+ * Checks for missing keys, empty values, and orphaned keys (keys removed from source)
  */
 export function validateTranslations(projectRoot: string = process.cwd()): ValidationResult {
   const config = loadConfig(projectRoot);
@@ -14,6 +14,7 @@ export function validateTranslations(projectRoot: string = process.cwd()): Valid
 
   const missing: MissingTranslation[] = [];
   const empty: MissingTranslation[] = [];
+  const orphaned: OrphanedTranslation[] = [];
 
   // Read source translations
   const sourceTranslations = readTranslations(translationsPath, sourceLanguage);
@@ -23,11 +24,15 @@ export function validateTranslations(projectRoot: string = process.cwd()): Valid
   // This ensures we validate ALL configured languages, not just ones on disk
   const languages = config.languages.filter((lang) => lang !== sourceLanguage);
 
-  // Sync structure before validation to ensure all files exist
+  // Sync structure before validation to ensure all files exist and clean orphaned keys
   const syncResult = syncTranslationStructure(translationsPath, config.languages, sourceLanguage);
 
   if (syncResult.createdFiles.length > 0) {
     console.log(`Created ${syncResult.createdFiles.length} missing namespace files during sync`);
+  }
+
+  if (syncResult.cleanedKeys.length > 0) {
+    console.log(`Cleaned ${syncResult.cleanedKeys.length} orphaned keys during sync`);
   }
 
   console.log('=====');
@@ -70,10 +75,22 @@ export function validateTranslations(projectRoot: string = process.cwd()): Valid
           });
         }
       }
+
+      // Check for orphaned keys (exist in target but not in source)
+      for (const [key, targetValue] of Object.entries(targetKeys)) {
+        if (sourceKeys[key] === undefined) {
+          orphaned.push({
+            namespace,
+            key,
+            language,
+            value: targetValue
+          });
+        }
+      }
     }
   }
 
-  const valid = !missing.length && !empty.length;
+  const valid = !missing.length && !empty.length && !orphaned.length;
 
   if (valid) {
     console.log('✓ All translations are valid!');
@@ -97,11 +114,21 @@ export function validateTranslations(projectRoot: string = process.cwd()): Valid
         console.log(`  ... and ${empty.length - 10} more`);
       }
     }
+
+    if (orphaned.length > 0) {
+      console.log(`\n⚠ Found ${orphaned.length} orphaned translations (keys removed from source):`);
+      for (const item of orphaned.slice(0, 10)) {
+        console.log(`  ${item.language}/${item.namespace}.json -> ${item.key}`);
+      }
+      if (orphaned.length > 10) {
+        console.log(`  ... and ${orphaned.length - 10} more`);
+      }
+    }
   }
 
   console.log('=====');
 
-  return { valid, missing, empty };
+  return { valid, missing, empty, orphaned };
 }
 
 /**

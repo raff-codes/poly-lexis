@@ -150,6 +150,7 @@ export interface SyncResult {
   createdFolders: string[];
   createdFiles: Array<{ language: string; namespace: string; path: string }>;
   skippedFiles: Array<{ language: string; namespace: string; reason: string }>;
+  cleanedKeys: Array<{ language: string; namespace: string; key: string }>;
 }
 
 /**
@@ -157,6 +158,7 @@ export interface SyncResult {
  * - Ensures all configured languages have folders
  * - Ensures all namespaces from source language exist in target languages
  * - Creates files with empty values matching source structure
+ * - Removes orphaned keys from target languages (keys not in source)
  */
 export function syncTranslationStructure(
   translationsPath: string,
@@ -166,7 +168,8 @@ export function syncTranslationStructure(
   const result: SyncResult = {
     createdFolders: [],
     createdFiles: [],
-    skippedFiles: []
+    skippedFiles: [],
+    cleanedKeys: []
   };
 
   // 1. Ensure all language folders exist
@@ -186,21 +189,55 @@ export function syncTranslationStructure(
   const targetLanguages = languages.filter((lang) => lang !== sourceLanguage);
 
   for (const language of targetLanguages) {
+    const targetTranslations = readTranslations(translationsPath, language);
+
     for (const namespace of sourceNamespaces) {
       const filePath = path.join(translationsPath, language, `${namespace}.json`);
+      const sourceFile = sourceTranslations[namespace] || {};
 
       // Check if file already exists
       if (fs.existsSync(filePath)) {
+        // File exists - check for orphaned keys and remove them
+        const targetFile = targetTranslations[namespace] || {};
+        let hasOrphanedKeys = false;
+        const cleanedFile: TranslationFile = {};
+
+        // Only keep keys that exist in source
+        for (const key of Object.keys(targetFile)) {
+          if (sourceFile[key] !== undefined) {
+            cleanedFile[key] = targetFile[key];
+          } else {
+            // Orphaned key found
+            hasOrphanedKeys = true;
+            result.cleanedKeys.push({
+              language,
+              namespace,
+              key
+            });
+          }
+        }
+
+        // Add missing keys with empty values
+        for (const key of Object.keys(sourceFile)) {
+          if (cleanedFile[key] === undefined) {
+            cleanedFile[key] = '';
+          }
+        }
+
+        // Write the cleaned file if there were orphaned keys
+        if (hasOrphanedKeys) {
+          writeTranslation(translationsPath, language, namespace, cleanedFile);
+        }
+
         result.skippedFiles.push({
           language,
           namespace,
-          reason: 'already exists'
+          reason: hasOrphanedKeys ? 'cleaned orphaned keys' : 'already exists'
         });
         continue;
       }
 
       // Create empty structure from source
-      const sourceFile = sourceTranslations[namespace] || {};
       const emptyStructure = createEmptyTranslationStructure(sourceFile);
 
       // Write the file

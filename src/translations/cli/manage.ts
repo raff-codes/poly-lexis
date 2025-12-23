@@ -66,7 +66,13 @@ export async function manageTranslations(
 
   if (syncResult.createdFiles.length > 0) {
     console.log(`✓ Created ${syncResult.createdFiles.length} namespace files\n`);
-  } else {
+  }
+
+  if (syncResult.cleanedKeys.length > 0) {
+    console.log(`✓ Removed ${syncResult.cleanedKeys.length} orphaned keys from translation files\n`);
+  }
+
+  if (syncResult.createdFiles.length === 0 && syncResult.cleanedKeys.length === 0) {
     console.log('✓ Translation structure is already synchronized\n');
   }
 
@@ -77,7 +83,8 @@ export async function manageTranslations(
   if (validationResult.valid) {
     console.log('\n✅ All translations are complete!\n');
   } else {
-    const totalMissing = validationResult.missing.length + validationResult.empty.length;
+    const totalMissing =
+      validationResult.missing.length + validationResult.empty.length + validationResult.orphaned.length;
 
     // Step 4: Auto-fill if requested
     if (autoFill) {
@@ -133,6 +140,9 @@ export async function manageTranslations(
   if (!validationResult.valid && !autoFill) {
     console.log(`\n⚠️  ${validationResult.missing.length} missing translations`);
     console.log(`⚠️  ${validationResult.empty.length} empty translations`);
+    if (validationResult.orphaned.length > 0) {
+      console.log(`⚠️  ${validationResult.orphaned.length} orphaned translations (will be auto-removed on next sync)`);
+    }
     console.log('\nNext steps:');
     console.log('  1. Add missing translations manually, or');
     console.log('  2. Run with --auto-fill to translate automatically');
