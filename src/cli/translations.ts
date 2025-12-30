@@ -20,8 +20,11 @@ const { values, positionals } = parseArgs({
       type: 'string'
     },
     limit: {
+      type: 'string'
+    },
+    concurrency: {
       type: 'string',
-      default: '1000'
+      default: '5'
     },
     language: {
       type: 'string',
@@ -72,7 +75,8 @@ Options (Smart Mode):
   -a, --auto-fill         Auto-fill missing translations with DeepL or Google Translate
   --api-key <key>         Translation API key (or set DEEPL_API_KEY/GOOGLE_TRANSLATE_API_KEY)
   -l, --language <lang>   Process only this language
-  --limit <number>        Max translations to process (default: 1000)
+  --limit <number>        Max translations to process (default: unlimited)
+  --concurrency <number>  Number of concurrent translation requests (default: 5)
   --skip-types            Skip TypeScript type generation
   -d, --dry-run           Preview changes without saving
   -h, --help              Show this help
@@ -323,12 +327,14 @@ else if (command === 'add') {
     const provider = config.provider || 'deepl';
     const envVarName = provider === 'google' ? 'GOOGLE_TRANSLATE_API_KEY' : 'DEEPL_API_KEY';
     const apiKey = values['api-key'] || process.env[envVarName];
-    const limit = Number.parseInt(values.limit || '1000', 10);
+    const limit = values.limit ? Number.parseInt(values.limit, 10) : undefined;
+    const concurrency = Number.parseInt(values.concurrency || '5', 10);
 
     manageTranslations(process.cwd(), {
       autoFill: values['auto-fill'],
       apiKey,
       limit,
+      concurrency,
       language: values.language,
       skipTypes: values['skip-types'],
       dryRun: values['dry-run']

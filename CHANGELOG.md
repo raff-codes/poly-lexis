@@ -1,5 +1,11 @@
 # poly-lexis
 
+## 0.5.2
+
+### Patch Changes
+
+- Improved auto translation concurrency
+
 ## 0.5.1
 
 ### Patch Changes

@@ -13,6 +13,8 @@ export interface ManageTranslationsOptions {
   apiKey?: string;
   /** Maximum translations to fill */
   limit?: number;
+  /** Number of concurrent translation requests */
+  concurrency?: number;
   /** Specific language to process */
   language?: string;
   /** Skip type generation */
@@ -30,7 +32,7 @@ export async function manageTranslations(
   projectRoot: string = process.cwd(),
   options: ManageTranslationsOptions = {}
 ): Promise<boolean> {
-  const { autoFill = false, apiKey, limit = 1000, language, skipTypes = false, dryRun = false } = options;
+  const { autoFill = false, apiKey, limit, concurrency = 5, language, skipTypes = false, dryRun = false } = options;
 
   console.log('=====');
   console.log('Translation Management');
@@ -106,9 +108,10 @@ export async function manageTranslations(
         await autoFillTranslations(projectRoot, {
           apiKey,
           limit,
+          concurrency,
           language,
           dryRun,
-          delayMs: 100
+          delayMs: 50
         });
 
         // Re-validate after auto-fill

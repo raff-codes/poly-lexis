@@ -17,6 +17,43 @@ interface AutoFillOptions {
   delayMs?: number;
   /** Dry run - don't actually write translations */
   dryRun?: boolean;
+  /** Number of concurrent translation requests (default: 5) */
+  concurrency?: number;
+}
+
+/**
+ * Process items in parallel with a concurrency limit
+ */
+async function processConcurrently<T, R>(
+  items: T[],
+  concurrency: number,
+  processor: (item: T, index: number) => Promise<R>
+): Promise<R[]> {
+  const results: R[] = [];
+  const executing: Promise<void>[] = [];
+
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i];
+    const promise = processor(item, i).then((result) => {
+      results[i] = result;
+    });
+
+    executing.push(promise);
+
+    if (executing.length >= concurrency) {
+      await Promise.race(executing);
+      // Remove completed promises
+      const index = executing.indexOf(promise);
+      if (index !== -1) {
+        executing.splice(index, 1);
+      }
+    }
+  }
+
+  // Wait for all remaining promises to complete
+  await Promise.all(executing);
+
+  return results;
 }
 
 /**
@@ -28,7 +65,7 @@ export async function autoFillTranslations(
 ): Promise<void> {
   const config = loadConfig(projectRoot);
   const translationsPath = path.join(projectRoot, config.translationsPath);
-  const { apiKey, limit = 1000, delayMs = 100, dryRun = false } = options;
+  const { apiKey, limit = Infinity, delayMs = 50, dryRun = false, concurrency = 5 } = options;
 
   // Set up the translation provider based on config (only if not already set by user)
   const currentProvider = getTranslationProvider();
@@ -67,7 +104,8 @@ export async function autoFillTranslations(
   console.log('Auto-filling translations');
   console.log('=====');
   console.log(`Languages: ${languagesToProcess.join(', ')}`);
-  console.log(`Limit: ${limit}`);
+  console.log(`Limit: ${limit === Infinity ? 'unlimited' : limit}`);
+  console.log(`Concurrency: ${concurrency}`);
   console.log(`Dry run: ${dryRun}`);
   console.log('=====');
 
@@ -94,13 +132,15 @@ export async function autoFillTranslations(
 
     // Process up to the remaining limit
     const remainingLimit = limit - totalProcessed;
-    const itemsToProcess = missing.slice(0, remainingLimit);
+    const itemsToProcess = missing.slice(0, remainingLimit === Infinity ? missing.length : remainingLimit);
 
-    for (const item of itemsToProcess) {
-      totalProcessed++;
+    // Process translations in parallel with concurrency control
+    const results = await processConcurrently(itemsToProcess, concurrency, async (item, index) => {
+      const currentCount = totalProcessed + index + 1;
+      const limitDisplay = limit === Infinity ? itemsToProcess.length : limit;
 
       try {
-        console.log(`  [${totalProcessed}/${limit}] Translating ${item.namespace}.${item.key}`);
+        console.log(`  [${currentCount}/${limitDisplay}] Translating ${item.namespace}.${item.key}`);
         console.log(`    EN: "${item.sourceValue}"`);
 
         // Translate the text
@@ -132,16 +172,21 @@ export async function autoFillTranslations(
           console.log('    ✓ Dry run - not saved');
         }
 
-        totalTranslated++;
-
-        // Delay to avoid rate limiting
-        if (delayMs > 0 && totalProcessed < limit) {
+        // Optional delay between requests (useful for rate limiting)
+        if (delayMs > 0) {
           await new Promise((resolve) => setTimeout(resolve, delayMs));
         }
+
+        return { success: true, item };
       } catch (error) {
         console.error(`    ✗ Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        return { success: false, item };
       }
-    }
+    });
+
+    // Update totals
+    totalProcessed += itemsToProcess.length;
+    totalTranslated += results.filter((r) => r.success).length;
   }
 
   console.log('\n=====');
