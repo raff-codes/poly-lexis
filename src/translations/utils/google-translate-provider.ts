@@ -18,7 +18,7 @@ interface GoogleTranslateResponse {
 }
 
 /**
- * Preserve {{variable}} interpolations by replacing with placeholders
+ * Preserve {{variable}} and {variable} interpolations by replacing with placeholders
  * Uses a format that Google Translate won't translate (uppercase + underscores + numbers)
  */
 function preserveVariables(text: string): {
@@ -28,19 +28,27 @@ function preserveVariables(text: string): {
   const variableMap = new Map<string, string>();
   let placeholderIndex = 0;
 
-  const textWithPlaceholders = text.replace(/\{\{([^}]+)\}\}/g, (match) => {
-    // Use XXX prefix (not a real word in any language) to avoid translation
-    const placeholder = `XXX_${placeholderIndex}_XXX`;
-    variableMap.set(placeholder, match);
-    placeholderIndex++;
-    return placeholder;
-  });
+  // Match both {{variable}} and {variable} patterns
+  // Process {{...}} first to avoid partial matches
+  const textWithPlaceholders = text
+    .replace(/\{\{([^}]+)\}\}/g, (match) => {
+      const placeholder = `XXX_${placeholderIndex}_XXX`;
+      variableMap.set(placeholder, match);
+      placeholderIndex++;
+      return placeholder;
+    })
+    .replace(/\{([^}]+)\}/g, (match) => {
+      const placeholder = `XXX_${placeholderIndex}_XXX`;
+      variableMap.set(placeholder, match);
+      placeholderIndex++;
+      return placeholder;
+    });
 
   return { textWithPlaceholders, variableMap };
 }
 
 /**
- * Restore original {{variable}} interpolations from placeholders
+ * Restore original {{variable}} and {variable} interpolations from placeholders
  */
 function restoreVariables(text: string, variableMap: Map<string, string>): string {
   let result = text;

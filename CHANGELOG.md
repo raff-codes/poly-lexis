@@ -1,5 +1,11 @@
 # poly-lexis
 
+## 0.5.3
+
+### Patch Changes
+
+- Allow {} params
+
 ## 0.5.2
 
 ### Patch Changes
