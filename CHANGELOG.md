@@ -1,5 +1,11 @@
 # poly-lexis
 
+## 0.6.0
+
+### Minor Changes
+
+- Allow nested translations structure
+
 ## 0.5.3
 
 ### Patch Changes

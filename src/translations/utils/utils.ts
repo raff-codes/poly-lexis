@@ -3,7 +3,67 @@ import * as path from 'node:path';
 import type { TranslationFile, TranslationFiles } from '../core/types.js';
 
 /**
+ * Nested translation structure (allows nested objects)
+ */
+export type NestedTranslationFile = {
+  [key: string]: string | NestedTranslationFile;
+};
+
+/**
+ * Flatten a nested object into a flat key-value structure using dot notation
+ * Example: { home: { title: "Hello" } } -> { "home.title": "Hello" }
+ */
+export function flattenObject(obj: NestedTranslationFile, prefix = ''): TranslationFile {
+  const result: TranslationFile = {};
+
+  for (const [key, value] of Object.entries(obj)) {
+    const newKey = prefix ? `${prefix}.${key}` : key;
+
+    if (typeof value === 'string') {
+      result[newKey] = value;
+    } else if (typeof value === 'object' && value !== null) {
+      Object.assign(result, flattenObject(value, newKey));
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Unflatten a flat object with dot notation keys into a nested structure
+ * Example: { "home.title": "Hello" } -> { home: { title: "Hello" } }
+ */
+export function unflattenObject(obj: TranslationFile): NestedTranslationFile {
+  const result: NestedTranslationFile = {};
+
+  for (const [key, value] of Object.entries(obj)) {
+    const parts = key.split('.');
+    let current: NestedTranslationFile = result;
+
+    for (let i = 0; i < parts.length - 1; i++) {
+      const part = parts[i];
+      if (!(part in current) || typeof current[part] === 'string') {
+        current[part] = {};
+      }
+      current = current[part] as NestedTranslationFile;
+    }
+
+    current[parts[parts.length - 1]] = value;
+  }
+
+  return result;
+}
+
+/**
+ * Check if an object is flat (all values are strings) or nested
+ */
+export function isNestedObject(obj: Record<string, unknown>): boolean {
+  return Object.values(obj).some((value) => typeof value === 'object' && value !== null);
+}
+
+/**
  * Read all translation files for a specific language
+ * Automatically flattens nested structures into dot notation
  */
 export function readTranslations(translationsPath: string, language: string): TranslationFiles {
   const langPath = path.join(translationsPath, language);
@@ -19,7 +79,14 @@ export function readTranslations(translationsPath: string, language: string): Tr
     const namespace = path.basename(file, '.json');
     const filePath = path.join(langPath, file);
     const content = fs.readFileSync(filePath, 'utf-8');
-    translations[namespace] = JSON.parse(content) as TranslationFile;
+    const parsed = JSON.parse(content) as NestedTranslationFile;
+
+    // Flatten nested structures automatically
+    if (isNestedObject(parsed)) {
+      translations[namespace] = flattenObject(parsed);
+    } else {
+      translations[namespace] = parsed as TranslationFile;
+    }
   }
 
   return translations;
