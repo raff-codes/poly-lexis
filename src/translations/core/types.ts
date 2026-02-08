@@ -67,6 +67,18 @@ export interface UnusedKeysResult {
   searchedFiles: number;
 }
 
+export interface DuplicateTranslation {
+  namespace: string; // the non-common namespace where the dup lives
+  key: string; // the key in that namespace
+  commonKey: string; // the matching key in common
+  value: string; // the shared value
+}
+
+export interface DuplicateKeysResult {
+  duplicates: DuplicateTranslation[];
+  totalKeysChecked: number;
+}
+
 export const DEFAULT_CONFIG: Required<TranslationConfig> = {
   translationsPath: 'public/static/locales',
   languages: ['en'],

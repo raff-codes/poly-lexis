@@ -67,9 +67,10 @@ Smart translation management - automatically handles initialization, validation,
 auto-filling, and type generation based on your project's current state.
 
 Commands:
-  (none)          Smart mode - validates, fills, and generates types
-  add             Add a new translation key
-  find-unused     Find translation keys that are not used in the codebase
+  (none)              Smart mode - validates, fills, and generates types
+  add                 Add a new translation key
+  find-unused         Find translation keys that are not used in the codebase
+  find-duplicates     Find values duplicated from the common namespace
 
 Options (Smart Mode):
   -a, --auto-fill         Auto-fill missing translations with DeepL or Google Translate
@@ -119,6 +120,9 @@ Examples:
   # Find unused translation keys
   translations find-unused
 
+  # Find values duplicated from common namespace
+  translations find-duplicates
+
 What happens in smart mode:
   1. Checks if translations are initialized (creates .translationsrc.json if needed)
   2. Validates all translations against source language
@@ -141,6 +145,22 @@ if (command === 'find-unused') {
 
       const result = findUnusedKeys(process.cwd());
       printUnusedKeysResult(result);
+    } catch (error) {
+      console.error('Error:', error instanceof Error ? error.message : error);
+      process.exit(1);
+    }
+  })();
+}
+// Handle 'find-duplicates' command
+else if (command === 'find-duplicates') {
+  (async () => {
+    try {
+      const { findDuplicates, printDuplicateKeysResult } = await import('../translations/cli/find-duplicates.js');
+
+      console.log('\n🔍 Finding duplicate translations (common namespace)...\n');
+
+      const result = findDuplicates(process.cwd());
+      printDuplicateKeysResult(result);
     } catch (error) {
       console.error('Error:', error instanceof Error ? error.message : error);
       process.exit(1);
@@ -376,6 +396,11 @@ else if (command === 'add') {
               description: 'Find translation keys not used in the codebase'
             },
             {
+              name: '🔎 Find duplicate values',
+              value: 'find-duplicates',
+              description: 'Find values duplicated from the common namespace'
+            },
+            {
               name: '🤖 Auto-fill missing translations',
               value: 'autofill',
               description: 'Automatically translate missing keys with DeepL or Google Translate'
@@ -540,6 +565,10 @@ else if (command === 'add') {
           const { findUnusedKeys, printUnusedKeysResult } = await import('../translations/cli/find-unused.js');
           const result = findUnusedKeys(process.cwd());
           printUnusedKeysResult(result);
+        } else if (action === 'find-duplicates') {
+          const { findDuplicates, printDuplicateKeysResult } = await import('../translations/cli/find-duplicates.js');
+          const result = findDuplicates(process.cwd());
+          printDuplicateKeysResult(result);
         } else if (action === 'types') {
           console.log('📝 Generating TypeScript types...\n');
           const { generateTranslationTypes } = await import('../translations/cli/generate-types.js');
