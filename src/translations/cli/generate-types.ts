@@ -4,6 +4,31 @@ import * as path from 'node:path';
 import { getNamespaces, readTranslations } from '../utils/utils.js';
 import { loadConfig } from './init.js';
 
+const PLURAL_SUFFIXES = ['_zero', '_one', '_two', '_few', '_many', '_other'] as const;
+
+/**
+ * Extract base keys from plural-suffixed keys (e.g., "items_one" -> "items")
+ * Follows CLDR plural categories used by i18next and similar libraries.
+ */
+export function extractPluralBaseKeys(keys: string[]): string[] {
+  const keySet = new Set(keys);
+  const baseKeys = new Set<string>();
+
+  for (const key of keys) {
+    for (const suffix of PLURAL_SUFFIXES) {
+      if (key.endsWith(suffix)) {
+        const baseKey = key.slice(0, -suffix.length);
+        if (baseKey && !keySet.has(baseKey)) {
+          baseKeys.add(baseKey);
+        }
+        break;
+      }
+    }
+  }
+
+  return Array.from(baseKeys);
+}
+
 const typeTemplate = (translationKeys: string[], namespaceKeys: string[]): string => `
   export const translationKeys = [${translationKeys.map((key) => `"${key}"`).join(', ')}] as const;
   export const namespaceKeys = [${namespaceKeys.map((key) => `"${key}"`).join(', ')}] as const;
@@ -48,6 +73,10 @@ export function generateTranslationTypes(projectRoot: string = process.cwd()): v
     const keys = Object.keys(translations[namespace] || {});
     allKeys = allKeys.concat(keys);
   }
+
+  // Add base keys for plural-suffixed keys (e.g., "items_one" -> also generates "items")
+  const pluralBaseKeys = extractPluralBaseKeys(allKeys);
+  allKeys = allKeys.concat(pluralBaseKeys);
 
   // Ensure the output directory exists
   const outputDir = path.dirname(outputFilePath);
