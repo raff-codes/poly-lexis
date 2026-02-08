@@ -1,5 +1,12 @@
 # poly-lexis
 
+## 0.8.0
+
+### Minor Changes
+
+- b480a8a: Generate pluralised keys
+- 0e5e148: Find duplicate key values
+
 ## 0.6.0
 
 ### Minor Changes
