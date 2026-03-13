@@ -29,12 +29,14 @@ export function extractPluralBaseKeys(keys: string[]): string[] {
   return Array.from(baseKeys);
 }
 
-const typeTemplate = (translationKeys: string[], namespaceKeys: string[]): string => `
+const typeTemplate = (translationKeys: string[], namespaceKeys: string[], languages: string[]): string => `
   export const translationKeys = [${translationKeys.map((key) => `"${key}"`).join(', ')}] as const;
   export const namespaceKeys = [${namespaceKeys.map((key) => `"${key}"`).join(', ')}] as const;
+  export const languages = [${languages.map((lang) => `"${lang}"`).join(', ')}] as const;
 
   export type TranslationKey = typeof translationKeys[number];
   export type TranslationNamespace = typeof namespaceKeys[number];
+  export type Language = typeof languages[number];
 `;
 
 /**
@@ -84,7 +86,7 @@ export function generateTranslationTypes(projectRoot: string = process.cwd()): v
     fs.mkdirSync(outputDir, { recursive: true });
   }
 
-  const typeString = typeTemplate(allKeys, namespaces);
+  const typeString = typeTemplate(allKeys, namespaces, config.languages);
   fs.writeFileSync(outputFilePath, typeString, 'utf8');
 
   console.log(`Generated types with ${allKeys.length} keys and ${namespaces.length} namespaces`);
