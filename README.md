@@ -150,7 +150,8 @@ poly-lexis uses a `.translationsrc.json` file in your project root for configura
   "languages": ["en", "es", "fr", "de"],
   "sourceLanguage": "en",
   "typesOutputPath": "src/types/i18nTypes.ts",
-  "provider": "deepl"
+  "provider": "deepl",
+  "protectedTerms": ["MyBrand", "ProductName"]
 }
 ```
 
@@ -161,6 +162,19 @@ poly-lexis uses a `.translationsrc.json` file in your project root for configura
 - `sourceLanguage` - Source language for translations (default: `"en"`)
 - `typesOutputPath` - Path to output TypeScript types (default: `src/types/i18nTypes.ts`)
 - `provider` - Translation provider to use: `"deepl"` or `"google"` (default: `"deepl"`)
+- `protectedTerms` - Words or phrases that should never be translated (default: `[]`)
+
+### Protected Terms
+
+Use `protectedTerms` to prevent specific words or phrases from being translated — useful for brand names, product names, or any term that must remain unchanged across all languages.
+
+```json
+{
+  "protectedTerms": ["Vandelay Industries", "MyProduct"]
+}
+```
+
+These terms are replaced with placeholders before the text is sent to the translation API and restored afterwards, so the translation service never sees them.
 
 ### Environment Variables
 

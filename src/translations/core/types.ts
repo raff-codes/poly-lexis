@@ -17,6 +17,8 @@ export interface TranslationConfig {
   searchPaths?: string[];
   /** File extensions to search for key usage (default: ['.ts', '.tsx', '.js', '.jsx', '.vue', '.svelte']) */
   searchExtensions?: string[];
+  /** Words or phrases that should never be translated (e.g. brand names, product names) */
+  protectedTerms?: string[];
 }
 
 export interface TranslationEntry {
@@ -87,7 +89,8 @@ export const DEFAULT_CONFIG: Required<TranslationConfig> = {
   provider: 'deepl',
   useFallbackLanguages: true,
   searchPaths: ['src', 'app', 'pages', 'components'],
-  searchExtensions: ['.ts', '.tsx', '.js', '.jsx', '.vue', '.svelte']
+  searchExtensions: ['.ts', '.tsx', '.js', '.jsx', '.vue', '.svelte'],
+  protectedTerms: []
 };
 
 export const DEFAULT_LANGUAGES = ['en', 'fr', 'it', 'pl', 'es', 'pt', 'de', 'nl', 'sv', 'hu', 'cs', 'ja'] as const;

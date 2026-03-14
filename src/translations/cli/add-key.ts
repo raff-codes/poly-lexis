@@ -83,7 +83,14 @@ export async function addTranslationKey(projectRoot: string, options: AddKeyOpti
 
         // Only translate if key doesn't exist or is empty
         if (!targetTranslations[namespace][key] || targetTranslations[namespace][key].trim() === '') {
-          const translated = await translateText(value, lang, sourceLang, apiKey, config.useFallbackLanguages ?? true);
+          const translated = await translateText(
+            value,
+            lang,
+            sourceLang,
+            apiKey,
+            config.useFallbackLanguages,
+            config.protectedTerms
+          );
           targetTranslations[namespace][key] = translated;
           const sorted = sortKeys(targetTranslations[namespace]);
           writeTranslation(translationsPath, lang, namespace, sorted);

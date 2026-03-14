@@ -17,6 +17,8 @@ export interface TranslateOptions {
   apiKey?: string;
   /** Enable automatic language fallback for unsupported regional variants (default: true) */
   useFallbackLanguages?: boolean;
+  /** Words or phrases that should never be translated (e.g. brand names, product names) */
+  protectedTerms?: string[];
   /** Additional provider-specific options */
   [key: string]: unknown;
 }
