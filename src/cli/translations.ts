@@ -244,8 +244,8 @@ else if (command === 'add') {
           message: 'Enter translation key (UPPERCASE_SNAKE_CASE):',
           validate: (value) => {
             if (!value.trim()) return 'Key is required';
-            if (!/^[A-Z0-9_]+$/.test(value)) {
-              return 'Key should use UPPERCASE_SNAKE_CASE (e.g., SAVE_CHANGES)';
+            if (!/^[A-Z0-9_]+$/.test(value.toUpperCase())) {
+              return 'Key must be SNAKE_CASE (e.g., SAVE_CHANGES)';
             }
             return true;
           },
@@ -489,8 +489,8 @@ else if (command === 'add') {
             message: 'Enter translation key (UPPERCASE_SNAKE_CASE):',
             validate: (value) => {
               if (!value.trim()) return 'Key is required';
-              if (!/^[A-Z0-9_]+$/.test(value)) {
-                return 'Key should use UPPERCASE_SNAKE_CASE (e.g., SAVE_CHANGES)';
+              if (!/^[A-Z0-9_]+$/.test(value.toUpperCase())) {
+                return 'Key must be SNAKE_CASE (e.g., SAVE_CHANGES)';
               }
               return true;
             },
