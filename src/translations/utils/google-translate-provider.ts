@@ -21,16 +21,31 @@ interface GoogleTranslateResponse {
  * Preserve {{variable}} and {variable} interpolations by replacing with placeholders
  * Uses a format that Google Translate won't translate (uppercase + underscores + numbers)
  */
-function preserveVariables(text: string): {
+function preserveVariables(
+  text: string,
+  protectedTerms: string[] = []
+): {
   textWithPlaceholders: string;
   variableMap: Map<string, string>;
 } {
   const variableMap = new Map<string, string>();
   let placeholderIndex = 0;
+  let result = text;
+
+  // Replace protected terms first (before variable patterns)
+  for (const term of protectedTerms) {
+    const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    result = result.replace(new RegExp(escaped, 'g'), () => {
+      const placeholder = `XXX_${placeholderIndex}_XXX`;
+      variableMap.set(placeholder, term);
+      placeholderIndex++;
+      return placeholder;
+    });
+  }
 
   // Match both {{variable}} and {variable} patterns
   // Process {{...}} first to avoid partial matches
-  const textWithPlaceholders = text
+  const textWithPlaceholders = result
     .replace(/\{\{([^}]+)\}\}/g, (match) => {
       const placeholder = `XXX_${placeholderIndex}_XXX`;
       variableMap.set(placeholder, match);
@@ -64,7 +79,7 @@ function restoreVariables(text: string, variableMap: Map<string, string>): strin
  */
 export class GoogleTranslateProvider implements TranslationProvider {
   async translate(options: TranslateOptions): Promise<string> {
-    const { text, sourceLang, targetLang, apiKey, useFallbackLanguages = true } = options;
+    const { text, sourceLang, targetLang, apiKey, useFallbackLanguages = true, protectedTerms = [] } = options;
 
     if (!apiKey) {
       throw new Error(
@@ -85,7 +100,7 @@ export class GoogleTranslateProvider implements TranslationProvider {
     }
 
     // Extract and preserve interpolation variables
-    const { textWithPlaceholders, variableMap } = preserveVariables(text);
+    const { textWithPlaceholders, variableMap } = preserveVariables(text, protectedTerms);
 
     // Translate the text with placeholders
     const url = `https://translation.googleapis.com/language/translate/v2?key=${apiKey}`;

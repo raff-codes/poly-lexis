@@ -54,7 +54,8 @@ export async function translateText(
   targetLang: string,
   sourceLang: string = 'en',
   apiKey?: string,
-  useFallbackLanguages = true
+  useFallbackLanguages = true,
+  protectedTerms: string[] = []
 ): Promise<string> {
   const provider = getTranslationProvider();
   return provider.translate({
@@ -62,7 +63,8 @@ export async function translateText(
     sourceLang,
     targetLang,
     apiKey,
-    useFallbackLanguages
+    useFallbackLanguages,
+    protectedTerms
   });
 }
 

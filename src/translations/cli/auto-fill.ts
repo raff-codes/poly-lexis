@@ -149,7 +149,8 @@ export async function autoFillTranslations(
           language,
           config.sourceLanguage,
           apiKey,
-          config.useFallbackLanguages ?? true
+          config.useFallbackLanguages,
+          config.protectedTerms
         );
         console.log(`    ${language.toUpperCase()}: "${translated}"`);
 
@@ -249,7 +250,8 @@ export async function fillNamespace(
       language,
       config.sourceLanguage,
       apiKey,
-      config.useFallbackLanguages ?? true
+      config.useFallbackLanguages ?? true,
+      config.protectedTerms ?? []
     );
     targetKeys[key] = translated;
     count++;
