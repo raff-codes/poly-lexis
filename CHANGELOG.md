@@ -1,5 +1,11 @@
 # poly-lexis
 
+## 0.9.1
+
+### Patch Changes
+
+- minor: Update the config schema (adding protectedTerms)
+
 ## 0.9.0
 
 ### Minor Changes
