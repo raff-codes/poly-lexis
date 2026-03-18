@@ -1,5 +1,11 @@
 # poly-lexis
 
+## 0.9.3
+
+### Patch Changes
+
+- Schema fix
+
 ## 0.9.2
 
 ### Patch Changes

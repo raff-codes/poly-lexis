@@ -248,6 +248,14 @@ export const TRANSLATION_CONFIG_SCHEMA = {
         type: 'string'
       },
       default: ['.ts', '.tsx', '.js', '.jsx', '.vue', '.svelte']
+    },
+    protectedTerms: {
+      type: 'array',
+      description: 'List of terms that should never be translated (e.g. brand names, technical terms)',
+      items: {
+        type: 'string'
+      },
+      default: []
     }
   },
   required: ['translationsPath', 'languages', 'sourceLanguage'],
