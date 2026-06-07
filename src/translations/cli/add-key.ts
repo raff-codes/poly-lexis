@@ -2,6 +2,7 @@ import * as path from 'node:path';
 import type { TranslationEntry } from '../core/types.js';
 import { DeepLTranslateProvider } from '../utils/deepl-translate-provider.js';
 import { GoogleTranslateProvider } from '../utils/google-translate-provider.js';
+import { readMetadata, setSourceHash, writeMetadata } from '../utils/metadata.js';
 import { getTranslationProvider, setTranslationProvider, translateText } from '../utils/translator.js';
 import { readTranslations, sortKeys, writeTranslation } from '../utils/utils.js';
 import { generateTranslationTypes } from './generate-types.js';
@@ -73,6 +74,8 @@ export async function addTranslationKey(projectRoot: string, options: AddKeyOpti
   if (autoTranslate && apiKey) {
     console.log('\nAuto-translating to other languages...');
 
+    const metadata = readMetadata(translationsPath);
+
     for (const lang of otherLanguages) {
       try {
         const targetTranslations = readTranslations(translationsPath, lang);
@@ -94,6 +97,7 @@ export async function addTranslationKey(projectRoot: string, options: AddKeyOpti
           targetTranslations[namespace][key] = translated;
           const sorted = sortKeys(targetTranslations[namespace]);
           writeTranslation(translationsPath, lang, namespace, sorted);
+          setSourceHash(metadata, lang, namespace, key, value);
           console.log(`  ✓ ${lang}: "${translated}"`);
 
           // Small delay to avoid rate limiting
@@ -105,6 +109,8 @@ export async function addTranslationKey(projectRoot: string, options: AddKeyOpti
         console.error(`  ✗ ${lang}: Translation failed - ${error instanceof Error ? error.message : 'Unknown error'}`);
       }
     }
+
+    writeMetadata(translationsPath, metadata);
   } else {
     // Add empty string to other languages
     console.log('\nAdding empty values to other languages...');
