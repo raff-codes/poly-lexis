@@ -23,6 +23,7 @@ export * from './cli/validate.js';
 export * from './core/schema.js';
 export * from './core/types.js';
 export * from './utils/google-translate-provider.js';
+export * from './utils/metadata.js';
 // Utilities
 export * from './utils/translator.js';
 export * from './utils/translator-interface.js';

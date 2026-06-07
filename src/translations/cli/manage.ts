@@ -21,6 +21,10 @@ export interface ManageTranslationsOptions {
   skipTypes?: boolean;
   /** Dry run mode */
   dryRun?: boolean;
+  /** Re-translate keys whose source value has changed (stale translations) */
+  retranslateChanged?: boolean;
+  /** Re-translate every key, regardless of current value */
+  force?: boolean;
 }
 
 /**
@@ -32,7 +36,17 @@ export async function manageTranslations(
   projectRoot: string = process.cwd(),
   options: ManageTranslationsOptions = {}
 ): Promise<boolean> {
-  const { autoFill = false, apiKey, limit, concurrency = 5, language, skipTypes = false, dryRun = false } = options;
+  const {
+    autoFill = false,
+    apiKey,
+    limit,
+    concurrency = 5,
+    language,
+    skipTypes = false,
+    dryRun = false,
+    retranslateChanged = false,
+    force = false
+  } = options;
 
   console.log('=====');
   console.log('Translation Management');
@@ -90,9 +104,17 @@ export async function manageTranslations(
   console.log('🔍 Validating translations...\n');
   const validationResult = validateTranslations(projectRoot);
 
-  if (validationResult.valid) {
+  // Auto-fill should also run when there is nothing missing/empty but the user
+  // asked to re-translate changed (stale) keys or to force a full re-translation.
+  const hasWorkToFill = !validationResult.valid || force || (retranslateChanged && validationResult.stale.length > 0);
+
+  if (validationResult.valid && !validationResult.stale.length) {
     console.log('\n✅ All translations are complete!\n');
-  } else {
+  } else if (validationResult.valid) {
+    console.log(`\n⚠️  ${validationResult.stale.length} translations may be outdated.\n`);
+  }
+
+  if (hasWorkToFill) {
     const totalMissing =
       validationResult.missing.length + validationResult.empty.length + validationResult.orphaned.length;
 
@@ -104,27 +126,36 @@ export async function manageTranslations(
         console.log('\n⚠️  Auto-fill requested but no API key provided.');
         console.log(`Set ${envVarName} or pass --api-key to enable auto-fill.\n`);
       } else {
-        console.log(`\n🤖 Auto-filling ${totalMissing} missing translations...\n`);
+        if (force) {
+          console.log('\n🤖 Force re-translating all keys...\n');
+        } else {
+          const staleCount = retranslateChanged ? validationResult.stale.length : 0;
+          console.log(`\n🤖 Auto-filling ${totalMissing} missing and ${staleCount} changed translations...\n`);
+        }
         await autoFillTranslations(projectRoot, {
           apiKey,
           limit,
           concurrency,
           language,
           dryRun,
-          delayMs: 50
+          delayMs: 50,
+          retranslateChanged,
+          force
         });
 
         // Re-validate after auto-fill
         if (!dryRun) {
           console.log('\n🔍 Re-validating after auto-fill...\n');
           const revalidation = validateTranslations(projectRoot);
-          if (revalidation.valid) {
+          if (revalidation.valid && !revalidation.stale.length) {
             console.log('\n✅ All translations are now complete!\n');
           }
         }
       }
-    } else {
+    } else if (!validationResult.valid) {
       console.log(`\n💡 Tip: Run with --auto-fill to automatically translate missing keys.\n`);
+    } else if (validationResult.stale.length > 0) {
+      console.log('\n💡 Tip: Run with --auto-fill --retranslate-changed to update outdated translations.\n');
     }
   }
 
@@ -154,9 +185,16 @@ export async function manageTranslations(
     if (validationResult.orphaned.length > 0) {
       console.log(`⚠️  ${validationResult.orphaned.length} orphaned translations (will be auto-removed on next sync)`);
     }
+    if (validationResult.stale.length > 0) {
+      console.log(`⚠️  ${validationResult.stale.length} potentially outdated translations`);
+    }
     console.log('\nNext steps:');
     console.log('  1. Add missing translations manually, or');
     console.log('  2. Run with --auto-fill to translate automatically');
+  } else if (validationResult.valid && validationResult.stale.length > 0 && !autoFill) {
+    console.log(`\n⚠️  ${validationResult.stale.length} potentially outdated translations`);
+    console.log('\nNext steps:');
+    console.log('  Run with --auto-fill --retranslate-changed to update them');
   } else if (validationResult.valid) {
     console.log('\n✅ All systems ready!');
   }

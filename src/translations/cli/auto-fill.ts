@@ -1,10 +1,12 @@
 import * as path from 'node:path';
+import type { MissingTranslation } from '../core/types.js';
 import { DeepLTranslateProvider } from '../utils/deepl-translate-provider.js';
 import { GoogleTranslateProvider } from '../utils/google-translate-provider.js';
+import { readMetadata, setSourceHash, writeMetadata } from '../utils/metadata.js';
 import { getTranslationProvider, setTranslationProvider, translateText } from '../utils/translator.js';
 import { readTranslations, sortKeys, syncTranslationStructure, writeTranslation } from '../utils/utils.js';
 import { loadConfig } from './init.js';
-import { getMissingForLanguage } from './validate.js';
+import { type FillableType, getMissingForLanguage } from './validate.js';
 
 interface AutoFillOptions {
   /** Language to fill translations for */
@@ -19,6 +21,10 @@ interface AutoFillOptions {
   dryRun?: boolean;
   /** Number of concurrent translation requests (default: 5) */
   concurrency?: number;
+  /** Re-translate keys whose source value has changed since they were written */
+  retranslateChanged?: boolean;
+  /** Re-translate every key, even ones that already have an up-to-date value */
+  force?: boolean;
 }
 
 /**
@@ -56,6 +62,40 @@ async function processConcurrently<T, R>(
   return results;
 }
 
+interface FillItemOptions {
+  retranslateChanged?: boolean;
+  force?: boolean;
+}
+
+/**
+ * Determine which keys to (re-)translate for a language.
+ * - Default: missing and empty keys.
+ * - `retranslateChanged`: also include keys whose source value has changed.
+ * - `force`: every source key, regardless of current value.
+ */
+function getFillItemsForLanguage(
+  projectRoot: string,
+  translationsPath: string,
+  sourceLanguage: string,
+  language: string,
+  options: FillItemOptions
+): Array<MissingTranslation & { type: FillableType | 'forced' }> {
+  if (options.force) {
+    const sourceTranslations = readTranslations(translationsPath, sourceLanguage);
+    const items: Array<MissingTranslation & { type: 'forced' }> = [];
+
+    for (const [namespace, keys] of Object.entries(sourceTranslations)) {
+      for (const [key, sourceValue] of Object.entries(keys)) {
+        items.push({ namespace, key, language, sourceValue, type: 'forced' });
+      }
+    }
+
+    return items;
+  }
+
+  return getMissingForLanguage(projectRoot, language, { includeStale: options.retranslateChanged });
+}
+
 /**
  * Automatically fill empty or missing translations for a language
  */
@@ -65,7 +105,15 @@ export async function autoFillTranslations(
 ): Promise<void> {
   const config = loadConfig(projectRoot);
   const translationsPath = path.join(projectRoot, config.translationsPath);
-  const { apiKey, limit = Infinity, delayMs = 50, dryRun = false, concurrency = 5 } = options;
+  const {
+    apiKey,
+    limit = Infinity,
+    delayMs = 50,
+    dryRun = false,
+    concurrency = 5,
+    retranslateChanged = false,
+    force = false
+  } = options;
 
   // Set up the translation provider based on config (only if not already set by user)
   const currentProvider = getTranslationProvider();
@@ -100,14 +148,21 @@ export async function autoFillTranslations(
     console.log(`Created ${syncResult.createdFiles.length} namespace files\n`);
   }
 
+  const mode = force ? 'all keys (--force)' : retranslateChanged ? 'missing, empty & changed' : 'missing & empty';
+
   console.log('=====');
   console.log('Auto-filling translations');
   console.log('=====');
   console.log(`Languages: ${languagesToProcess.join(', ')}`);
+  console.log(`Mode: ${mode}`);
   console.log(`Limit: ${limit === Infinity ? 'unlimited' : limit}`);
   console.log(`Concurrency: ${concurrency}`);
   console.log(`Dry run: ${dryRun}`);
   console.log('=====');
+
+  // Source-hash metadata is updated as translations are written so future runs
+  // can detect when a source string changes again.
+  const metadata = readMetadata(translationsPath);
 
   let totalProcessed = 0;
   let totalTranslated = 0;
@@ -120,11 +175,14 @@ export async function autoFillTranslations(
 
     console.log(`\nProcessing language: ${language}`);
 
-    // Get missing and empty translations for this language
-    const missing = getMissingForLanguage(projectRoot, language);
+    // Determine which keys to (re-)translate for this language
+    const missing = getFillItemsForLanguage(projectRoot, translationsPath, config.sourceLanguage, language, {
+      retranslateChanged,
+      force
+    });
 
     if (!missing.length) {
-      console.log('  No missing or empty translations');
+      console.log('  Nothing to translate');
       continue;
     }
 
@@ -168,6 +226,9 @@ export async function autoFillTranslations(
 
           // Write back
           writeTranslation(translationsPath, language, item.namespace, sorted);
+
+          // Record the source value this translation was generated from
+          setSourceHash(metadata, language, item.namespace, item.key, item.sourceValue);
           console.log('    ✓ Saved');
         } else {
           console.log('    ✓ Dry run - not saved');
@@ -188,6 +249,12 @@ export async function autoFillTranslations(
     // Update totals
     totalProcessed += itemsToProcess.length;
     totalTranslated += results.filter((r) => r.success).length;
+
+    // Persist recorded source hashes after each language so progress survives
+    // an interruption on long runs.
+    if (!dryRun) {
+      writeMetadata(translationsPath, metadata);
+    }
   }
 
   console.log('\n=====');
@@ -234,6 +301,7 @@ export async function fillNamespace(
   const sourceKeys = sourceTranslations[namespace] || {};
   const targetKeys = targetTranslations[namespace] || {};
 
+  const metadata = readMetadata(translationsPath);
   let count = 0;
 
   for (const [key, sourceValue] of Object.entries(sourceKeys)) {
@@ -254,6 +322,7 @@ export async function fillNamespace(
       config.protectedTerms ?? []
     );
     targetKeys[key] = translated;
+    setSourceHash(metadata, language, namespace, key, sourceValue);
     count++;
 
     // Small delay
@@ -264,6 +333,7 @@ export async function fillNamespace(
   if (count > 0) {
     const sorted = sortKeys(targetKeys);
     writeTranslation(translationsPath, language, namespace, sorted);
+    writeMetadata(translationsPath, metadata);
     console.log(`✓ Filled ${count} translations`);
   } else {
     console.log('No translations to fill');
