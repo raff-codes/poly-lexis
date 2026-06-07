@@ -1,6 +1,13 @@
 import * as path from 'node:path';
 import type { MissingTranslation, OrphanedTranslation, StaleTranslation, ValidationResult } from '../core/types.js';
-import { getSourceHash, hashSourceValue, readMetadata } from '../utils/metadata.js';
+import {
+  getSourceHash,
+  hashSourceValue,
+  metadataExists,
+  readMetadata,
+  setSourceHash,
+  writeMetadata
+} from '../utils/metadata.js';
 import { getNamespaces, readTranslations, syncTranslationStructure } from '../utils/utils.js';
 import { loadConfig } from './init.js';
 
@@ -203,4 +210,67 @@ export function getMissingForLanguage(
   }
 
   return items;
+}
+
+export interface BaselineResult {
+  /** Number of existing translations newly recorded against their current source value */
+  recorded: number;
+  /** Whether the metadata sidecar file was created by this call */
+  created: boolean;
+}
+
+/**
+ * Establish a change-tracking baseline for an existing translation set.
+ *
+ * For every key that already has a non-empty translation but no recorded source
+ * hash, record the hash of its *current* source value. This lets existing
+ * codebases (whose translations predate change tracking) start detecting future
+ * source changes without re-translating anything.
+ *
+ * Keys that already have a recorded hash are left untouched — overwriting them
+ * would erase the signal that a translation has gone stale. As a result, this
+ * treats whatever is currently in the repo as the up-to-date baseline: a
+ * translation that is already stale at adoption time will be accepted as current.
+ */
+export function ensureBaselineMetadata(projectRoot: string = process.cwd()): BaselineResult {
+  const config = loadConfig(projectRoot);
+  const translationsPath = path.join(projectRoot, config.translationsPath);
+  const sourceLanguage = config.sourceLanguage;
+
+  const sourceTranslations = readTranslations(translationsPath, sourceLanguage);
+  const sourceNamespaces = getNamespaces(translationsPath, sourceLanguage);
+  const languages = config.languages.filter((lang) => lang !== sourceLanguage);
+
+  const existedBefore = metadataExists(translationsPath);
+  const metadata = readMetadata(translationsPath);
+
+  let recorded = 0;
+
+  for (const language of languages) {
+    const targetTranslations = readTranslations(translationsPath, language);
+
+    for (const namespace of sourceNamespaces) {
+      const sourceKeys = sourceTranslations[namespace] || {};
+      const targetKeys = targetTranslations[namespace] || {};
+
+      for (const [key, sourceValue] of Object.entries(sourceKeys)) {
+        const targetValue = targetKeys[key];
+        const alreadyTranslated = typeof targetValue === 'string' && targetValue.trim() !== '';
+        const alreadyTracked = getSourceHash(metadata, language, namespace, key) !== undefined;
+
+        if (alreadyTranslated && !alreadyTracked) {
+          setSourceHash(metadata, language, namespace, key, sourceValue);
+          recorded++;
+        }
+      }
+    }
+  }
+
+  // Only write when we actually recorded something, so we never create an empty
+  // sidecar file for a project that has nothing translated yet.
+  if (recorded > 0) {
+    writeMetadata(translationsPath, metadata);
+  }
+
+  return { recorded, created: !existedBefore && recorded > 0 };
 }

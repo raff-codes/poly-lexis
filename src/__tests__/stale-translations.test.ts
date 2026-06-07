@@ -1,7 +1,7 @@
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { getMissingForLanguage, validateTranslations } from '../translations/cli/validate.js';
+import { ensureBaselineMetadata, getMissingForLanguage, validateTranslations } from '../translations/cli/validate.js';
 import {
   emptyMetadata,
   getMetadataPath,
@@ -146,6 +146,76 @@ describe('Stale translation detection', () => {
       const withStale = getMissingForLanguage(testDir, 'fr', { includeStale: true });
       const stale = withStale.find((i) => i.key === 'HELLO');
       expect(stale).toMatchObject({ key: 'HELLO', type: 'stale', sourceValue: 'Changed' });
+    });
+  });
+
+  describe('ensureBaselineMetadata (existing codebases)', () => {
+    test('records hashes for already-translated keys and creates the file', () => {
+      writeTranslation(translationsPath, 'en', 'common', { HELLO: 'Hello', BYE: 'Bye' });
+      writeTranslation(translationsPath, 'fr', 'common', { HELLO: 'Bonjour', BYE: 'Au revoir' });
+      expect(fs.existsSync(getMetadataPath(translationsPath))).toBe(false);
+
+      const result = ensureBaselineMetadata(testDir);
+
+      expect(result).toEqual({ recorded: 2, created: true });
+      const metadata = readMetadata(translationsPath);
+      expect(getSourceHash(metadata, 'fr', 'common', 'HELLO')).toBe(hashSourceValue('Hello'));
+      expect(getSourceHash(metadata, 'fr', 'common', 'BYE')).toBe(hashSourceValue('Bye'));
+    });
+
+    test('baseline makes a subsequent source change detectable as stale', () => {
+      writeTranslation(translationsPath, 'en', 'common', { HELLO: 'Hello' });
+      writeTranslation(translationsPath, 'fr', 'common', { HELLO: 'Bonjour' });
+
+      // Without a baseline, the source change is invisible
+      writeTranslation(translationsPath, 'en', 'common', { HELLO: 'Hi there' });
+      expect(validateTranslations(testDir).stale).toHaveLength(0);
+
+      // Reset to original and baseline it, then change the source
+      writeTranslation(translationsPath, 'en', 'common', { HELLO: 'Hello' });
+      ensureBaselineMetadata(testDir);
+      writeTranslation(translationsPath, 'en', 'common', { HELLO: 'Hi there' });
+
+      expect(validateTranslations(testDir).stale).toHaveLength(1);
+    });
+
+    test('does not overwrite an existing hash (preserves stale detection)', () => {
+      writeTranslation(translationsPath, 'en', 'common', { HELLO: 'Hi there' });
+      writeTranslation(translationsPath, 'fr', 'common', { HELLO: 'Bonjour' });
+      // Pre-existing hash recorded against the OLD source value
+      recordHash('HELLO', 'Hello');
+
+      const result = ensureBaselineMetadata(testDir);
+
+      // Nothing recorded — the key was already tracked
+      expect(result.recorded).toBe(0);
+      const metadata = readMetadata(translationsPath);
+      expect(getSourceHash(metadata, 'fr', 'common', 'HELLO')).toBe(hashSourceValue('Hello'));
+      // Still flagged as stale
+      expect(validateTranslations(testDir).stale).toHaveLength(1);
+    });
+
+    test('skips empty translations and does not create a file when nothing is translated', () => {
+      writeTranslation(translationsPath, 'en', 'common', { HELLO: 'Hello' });
+      writeTranslation(translationsPath, 'fr', 'common', { HELLO: '' });
+
+      const result = ensureBaselineMetadata(testDir);
+
+      expect(result).toEqual({ recorded: 0, created: false });
+      expect(fs.existsSync(getMetadataPath(translationsPath))).toBe(false);
+    });
+
+    test('only baselines untracked keys, leaving tracked ones intact', () => {
+      writeTranslation(translationsPath, 'en', 'common', { HELLO: 'Hello', BYE: 'Bye' });
+      writeTranslation(translationsPath, 'fr', 'common', { HELLO: 'Bonjour', BYE: 'Au revoir' });
+      // HELLO is already tracked; BYE is not
+      recordHash('HELLO', 'Hello');
+
+      const result = ensureBaselineMetadata(testDir);
+
+      expect(result.recorded).toBe(1);
+      const metadata = readMetadata(translationsPath);
+      expect(getSourceHash(metadata, 'fr', 'common', 'BYE')).toBe(hashSourceValue('Bye'));
     });
   });
 

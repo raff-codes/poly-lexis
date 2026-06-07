@@ -4,7 +4,7 @@ import { syncTranslationStructure } from '../utils/utils.js';
 import { autoFillTranslations } from './auto-fill.js';
 import { generateTranslationTypes } from './generate-types.js';
 import { initTranslations, loadConfig } from './init.js';
-import { validateTranslations } from './validate.js';
+import { ensureBaselineMetadata, validateTranslations } from './validate.js';
 
 export interface ManageTranslationsOptions {
   /** Auto-fill missing translations */
@@ -98,6 +98,18 @@ export async function manageTranslations(
     syncResult.removedNamespaces.length === 0
   ) {
     console.log('✓ Translation structure is already synchronized\n');
+  }
+
+  // Step 2.6: Establish a change-tracking baseline for existing translations.
+  // Records the current source hash for any already-translated key that isn't
+  // tracked yet, so future source changes can be detected. Runs before
+  // validation so genuinely stale keys (already tracked) are still flagged.
+  if (!dryRun) {
+    const baseline = ensureBaselineMetadata(projectRoot);
+    if (baseline.recorded > 0) {
+      const verb = baseline.created ? 'Created change-tracking baseline for' : 'Added change tracking for';
+      console.log(`📌 ${verb} ${baseline.recorded} existing translations\n`);
+    }
   }
 
   // Step 3: Validate translations
