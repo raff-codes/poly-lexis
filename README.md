@@ -93,9 +93,13 @@ Notes:
 
 - Plain `--auto-fill` only fills missing/empty keys; it never overwrites an existing
   translation. Use `--retranslate-changed` to refresh stale ones.
-- Staleness can only be detected for translations written by poly-lexis (which record the
-  source hash). Translations added before this feature, or edited by hand, are treated as
-  "unknown" and are not flagged until they are next translated through poly-lexis.
+- **Existing codebases are handled automatically.** Any normal run (e.g. `poly-lexis`, the
+  "Full check" menu option, or validation) records a baseline hash for every key that is
+  already translated but not yet tracked, then creates/updates `.translations-meta.json`.
+  From that point on, source changes to those keys are detected. The baseline treats whatever
+  is in your repo at that moment as up to date, so a translation that is *already* stale when
+  you first adopt the feature is accepted as current. A dry run (`--dry-run`) never writes the
+  baseline.
 - Stale translations are reported as a warning and do **not** fail validation on their own.
 
 ### Add Translation Keys
