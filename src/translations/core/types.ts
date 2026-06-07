@@ -49,6 +49,16 @@ export interface OrphanedTranslation {
   value: string;
 }
 
+export interface StaleTranslation {
+  namespace: string;
+  key: string;
+  language: string;
+  /** Current source value (the translation should be regenerated from this) */
+  sourceValue: string;
+  /** The existing, potentially outdated, translated value */
+  currentValue: string;
+}
+
 export interface UnusedTranslation {
   namespace: string;
   key: string;
@@ -61,6 +71,12 @@ export interface ValidationResult {
   missing: MissingTranslation[];
   empty: MissingTranslation[];
   orphaned: OrphanedTranslation[];
+  /**
+   * Translations whose source value has changed since they were generated.
+   * Only detectable for translations written with source-hash tracking enabled.
+   * Reported as a warning; does not affect `valid`.
+   */
+  stale: StaleTranslation[];
 }
 
 export interface UnusedKeysResult {

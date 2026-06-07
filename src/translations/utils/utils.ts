@@ -1,6 +1,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type { TranslationFile, TranslationFiles } from '../core/types.js';
+import { metadataExists, pruneMetadata, readMetadata, writeMetadata } from './metadata.js';
 
 /**
  * Nested translation structure (allows nested objects)
@@ -333,6 +334,20 @@ export function syncTranslationStructure(
         namespace,
         path: filePath
       });
+    }
+  }
+
+  // Prune source-hash metadata for keys/namespaces no longer in the source,
+  // keeping the sidecar file in sync with the translation files.
+  if (metadataExists(translationsPath)) {
+    const sourceKeysByNamespace: Record<string, Set<string>> = {};
+    for (const namespace of sourceNamespaces) {
+      sourceKeysByNamespace[namespace] = new Set(Object.keys(sourceTranslations[namespace] || {}));
+    }
+
+    const metadata = readMetadata(translationsPath);
+    if (pruneMetadata(metadata, sourceKeysByNamespace)) {
+      writeMetadata(translationsPath, metadata);
     }
   }
 

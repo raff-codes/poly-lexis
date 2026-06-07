@@ -71,6 +71,33 @@ poly-lexis --auto-fill --dry-run
 poly-lexis --skip-types
 ```
 
+### Re-translating Changed Source Strings
+
+When you edit a source string (e.g. in `en/`) after it has already been translated, the
+existing translations in other languages become stale. poly-lexis detects this by recording
+a hash of the source value each translation was generated from (in a `.translations-meta.json`
+sidecar file inside your translations directory — commit it alongside your translation files).
+
+```bash
+# Validation warns about translations whose source string has changed
+poly-lexis
+
+# Re-translate only the keys whose source value changed
+poly-lexis --auto-fill --retranslate-changed
+
+# Re-translate everything from scratch (ignores existing values)
+poly-lexis --auto-fill --force
+```
+
+Notes:
+
+- Plain `--auto-fill` only fills missing/empty keys; it never overwrites an existing
+  translation. Use `--retranslate-changed` to refresh stale ones.
+- Staleness can only be detected for translations written by poly-lexis (which record the
+  source hash). Translations added before this feature, or edited by hand, are treated as
+  "unknown" and are not flagged until they are next translated through poly-lexis.
+- Stale translations are reported as a warning and do **not** fail validation on their own.
+
 ### Add Translation Keys
 
 ```bash
@@ -131,6 +158,8 @@ jobs:
 - `--api-key <key>` - Translation API key (or set DEEPL_API_KEY/GOOGLE_TRANSLATE_API_KEY env var)
 - `-l, --language <lang>` - Process only this language
 - `--limit <number>` - Max translations to process (default: 1000)
+- `--retranslate-changed` - Re-translate keys whose source value changed since last run (implies `--auto-fill`)
+- `--force` - Re-translate every key, even ones already translated (implies `--auto-fill`)
 - `--skip-types` - Skip TypeScript type generation
 - `-d, --dry-run` - Preview changes without saving
 
