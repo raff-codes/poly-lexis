@@ -39,6 +39,14 @@ const { values, positionals } = parseArgs({
       short: 'd',
       default: false
     },
+    'retranslate-changed': {
+      type: 'boolean',
+      default: false
+    },
+    force: {
+      type: 'boolean',
+      default: false
+    },
     namespace: {
       type: 'string',
       short: 'n'
@@ -78,6 +86,8 @@ Options (Smart Mode):
   -l, --language <lang>   Process only this language
   --limit <number>        Max translations to process (default: unlimited)
   --concurrency <number>  Number of concurrent translation requests (default: 5)
+  --retranslate-changed   Re-translate keys whose source value has changed since last run
+  --force                 Re-translate every key, even ones already translated
   --skip-types            Skip TypeScript type generation
   -d, --dry-run           Preview changes without saving
   -h, --help              Show this help
@@ -107,6 +117,12 @@ Examples:
 
   # Preview what would be translated (dry-run)
   translations --auto-fill --dry-run
+
+  # Re-translate keys whose source string changed since last run
+  translations --auto-fill --retranslate-changed
+
+  # Re-translate everything from scratch
+  translations --auto-fill --force
 
   # Add a new translation key (interactive mode)
   translations add
@@ -338,7 +354,13 @@ else if (command === 'add') {
   process.exit(1);
 } else {
   // Check if any flags were provided
-  const hasFlags = values['auto-fill'] || values.language || values['skip-types'] || values['dry-run'];
+  const hasFlags =
+    values['auto-fill'] ||
+    values.language ||
+    values['skip-types'] ||
+    values['dry-run'] ||
+    values['retranslate-changed'] ||
+    values.force;
 
   if (hasFlags) {
     // Flag mode - run with provided options
@@ -350,14 +372,19 @@ else if (command === 'add') {
     const limit = values.limit ? Number.parseInt(values.limit, 10) : undefined;
     const concurrency = Number.parseInt(values.concurrency || '5', 10);
 
+    // Re-translation flags imply auto-fill (they require the translation API)
+    const autoFill = values['auto-fill'] || values['retranslate-changed'] || values.force;
+
     manageTranslations(process.cwd(), {
-      autoFill: values['auto-fill'],
+      autoFill,
       apiKey,
       limit,
       concurrency,
       language: values.language,
       skipTypes: values['skip-types'],
-      dryRun: values['dry-run']
+      dryRun: values['dry-run'],
+      retranslateChanged: values['retranslate-changed'],
+      force: values.force
     })
       .then((isValid) => {
         if (!isValid) {
@@ -556,9 +583,15 @@ else if (command === 'add') {
           });
 
           if (shouldContinue) {
+            const retranslateChanged = await confirm({
+              message: 'Also re-translate keys whose source value has changed?',
+              default: false
+            });
+
             await manageTranslations(process.cwd(), {
               autoFill: true,
-              apiKey
+              apiKey,
+              retranslateChanged
             });
           }
         } else if (action === 'find-unused') {
