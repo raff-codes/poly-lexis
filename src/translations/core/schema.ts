@@ -1,3 +1,5 @@
+import { LANGUAGE_FALLBACK_MAP } from '../utils/language-fallback-map.js';
+
 /**
  * Translation provider types
  */
@@ -189,6 +191,23 @@ export const SUPPORTED_LANGUAGES = Array.from(
   new Set([...DEEPL_LANGUAGES, ...GOOGLE_LANGUAGES])
 ).sort() as readonly string[];
 
+/**
+ * Regional codes no provider supports directly that resolve to a supported
+ * language through the fallback map, e.g. fr_ca -> fr
+ */
+export const FALLBACK_LANGUAGES = Object.keys(LANGUAGE_FALLBACK_MAP)
+  .filter(
+    (lang) =>
+      !SUPPORTED_LANGUAGES.includes(lang) &&
+      LANGUAGE_FALLBACK_MAP[lang].some((fallback) => SUPPORTED_LANGUAGES.includes(fallback))
+  )
+  .sort() as readonly string[];
+
+/**
+ * Codes accepted in `languages`: supported ones plus those with a fallback
+ */
+export const CONFIG_LANGUAGES = [...SUPPORTED_LANGUAGES, ...FALLBACK_LANGUAGES].sort() as readonly string[];
+
 export type DeepLLanguage = (typeof DEEPL_LANGUAGES)[number];
 export type GoogleLanguage = (typeof GOOGLE_LANGUAGES)[number];
 export type SupportedLanguage = (typeof SUPPORTED_LANGUAGES)[number];
@@ -216,7 +235,7 @@ export const TRANSLATION_CONFIG_SCHEMA = {
       description: 'List of language codes to support',
       items: {
         type: 'string',
-        enum: SUPPORTED_LANGUAGES
+        enum: CONFIG_LANGUAGES
       },
       minItems: 1,
       uniqueItems: true,
@@ -403,7 +422,7 @@ export function validateLanguages(languages: string[]): {
   valid: boolean;
   invalid: string[];
 } {
-  const invalid = languages.filter((lang) => !isValidLanguage(lang));
+  const invalid = languages.filter((lang) => !CONFIG_LANGUAGES.includes(lang));
   return {
     valid: !invalid.length,
     invalid

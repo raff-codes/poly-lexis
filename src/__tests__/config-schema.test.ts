@@ -11,7 +11,8 @@ import {
   isValidLanguageForProvider,
   SUPPORTED_LANGUAGES,
   TRANSLATION_CONFIG_SCHEMA,
-  TRANSLATION_PROVIDERS
+  TRANSLATION_PROVIDERS,
+  validateLanguages
 } from '../translations/core/schema.js';
 import { DEFAULT_CONFIG } from '../translations/core/types.js';
 import {
@@ -107,6 +108,20 @@ describe('config schema', () => {
     ]);
     expect(claude.additionalProperties).toBe(false);
     expect(claude.properties?.maxKeysPerRequest.default).toBe(new ClaudeCodeProvider().supports.maxItems);
+  });
+});
+
+describe('validateLanguages', () => {
+  test('accepts regional codes that fall back to a supported language', () => {
+    expect(validateLanguages(['en', 'fr_ca', 'de_ch', 'es_mx'])).toEqual({ valid: true, invalid: [] });
+  });
+
+  test('rejects codes with no supported language or fallback', () => {
+    expect(validateLanguages(['en', 'xx', 'fr_xx'])).toEqual({ valid: false, invalid: ['xx', 'fr_xx'] });
+  });
+
+  test('the languages enum includes fallback codes', () => {
+    expect(properties.languages.items?.enum).toContain('fr_ca');
   });
 });
 
