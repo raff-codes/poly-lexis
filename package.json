@@ -53,7 +53,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/designedhead/poly-lexis"
+    "url": "git+https://github.com/raff-codes/poly-lexis.git"
   },
   "publishConfig": {
     "access": "public"
