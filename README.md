@@ -1,10 +1,15 @@
 # poly-lexis
 
-A powerful CLI and library for managing i18n translations with validation, auto-translation, and TypeScript type generation.
+A CLI and library for managing i18n translations: validation, context-aware auto-translation, review of existing translations, and TypeScript type generation.
 
 ## Overview
 
-poly-lexis provides a complete solution for managing internationalization (i18n) in your applications. It offers smart translation management with automatic validation, DeepL and Google Translate integration for auto-filling missing translations, and TypeScript type generation for type-safe translations.
+poly-lexis manages internationalization (i18n) for your applications. It validates your translation files, fills
+missing translations with DeepL, Google Translate or Claude, and generates TypeScript types for type-safe keys.
+
+Short UI strings are ambiguous on their own: "Open" can be a verb or a status, "Book" an action or a noun. poly-lexis
+sends each string with context (what the app is, which screen it's on, what kind of text it is, the strings around
+it) so it comes out right, and it can review the translations you already have against that context.
 
 ## Installation
 
@@ -25,26 +30,33 @@ npx poly-lexis
 # Add a new translation key
 npx poly-lexis add
 
-# Auto-fill missing translations with DeepL (recommended)
-export DEEPL_API_KEY=your_key
+# Auto-fill missing translations with the provider in .translationsrc.json
+export DEEPL_API_KEY=your_key            # "provider": "deepl"
+# export GOOGLE_TRANSLATE_API_KEY=...    # "provider": "google"
+# export ANTHROPIC_API_KEY=...           # "provider": "claude" (or sign into Claude Code, no key needed)
 npx poly-lexis --auto-fill
 
-# Or use Google Translate
-export GOOGLE_TRANSLATE_API_KEY=your_key
-npx poly-lexis --auto-fill
+# Check existing translations against their context (Claude providers)
+npx poly-lexis review
 
 # Validate and generate types
 npx poly-lexis
 ```
 
+For better translations, describe your app and screens: see [Getting Better Translations](#getting-better-translations).
+
 ## Features
 
 - ✅ **Smart translation management** - Automatic initialization and validation
 - ✅ **Interactive CLI** - User-friendly prompts for all operations
-- ✅ **Multiple providers** - DeepL (recommended) or Google Translate for auto-translation
+- ✅ **Multiple providers** - DeepL, Google Translate or Claude (through Claude Code or the Claude API), with a fallback
+- ✅ **Translation context** - Each string is sent with what the app and screen are, its UI role and nearby strings
+- ✅ **Glossary** - Shared terms with required translations, and brand names that are never translated
+- ✅ **Review** - Check existing translations against their context and apply the corrections you keep
+- ✅ **Safe writes** - Translations that lose a placeholder or change a brand name are never written; hand edits are kept
 - ✅ **Custom providers** - Extensible architecture for custom translation services
 - ✅ **Type generation** - Generate TypeScript types for type-safe translations
-- ✅ **Validation** - Detect missing or empty translation keys
+- ✅ **Validation** - Detect missing, empty, orphaned and stale translation keys
 - ✅ **Multiple namespaces** - Organize translations by feature/domain
 - ✅ **Programmatic API** - Use as a library in your Node.js code
 
@@ -70,6 +82,29 @@ poly-lexis --auto-fill --dry-run
 # Skip type generation
 poly-lexis --skip-types
 ```
+
+### Getting Better Translations
+
+Context is optional, and every step below improves the result on its own. A suggested order:
+
+1. **Describe the app** in `.translationsrc.json`. One sentence is enough:
+   ```json
+   "context": "Lush Spa is the internal tool spa staff use to manage treatments and bookings."
+   ```
+2. **Describe each screen.** Add a `$context` block to the top of each source-language file
+   (see [Translation Context](#translation-context)), or pass `--description` to `poly-lexis add`.
+   Once `context` is set, validation lists the namespaces that still need a description.
+3. **Add notes for ambiguous keys**, such as a word that's both a verb and a noun:
+   ```bash
+   poly-lexis add -n treatments -k BOOK -v "Book" --note "Button that confirms the booking"
+   ```
+4. **Add a glossary** for brand names and terms that must be translated one way
+   (see [Glossary](#glossary)).
+5. **Use Claude** (`"provider": "claude"`) to get the most out of the context. DeepL also gets it, as plain text.
+6. **Review what you already have:** `poly-lexis review`, then `poly-lexis review --apply`
+   (see [Reviewing Existing Translations](#reviewing-existing-translations)).
+
+To make descriptions mandatory in CI, set `"contextRequired": true`. Validation then fails for a namespace without one.
 
 ### Re-translating Changed Source Strings
 
@@ -113,7 +148,17 @@ poly-lexis add --namespace common --key HELLO --value "Hello"
 
 # With auto-translation
 poly-lexis add -n common -k WELCOME -v "Welcome" --auto-fill
+
+# With a note for translators, and a description of a new namespace
+poly-lexis add -n checkout -k BOOK -v "Book" --note "Button that confirms the booking" \
+  --description "Checkout for spa bookings" --auto-fill
 ```
+
+Interactive mode asks for the note, and for a description when the namespace doesn't have one yet. Notes and
+descriptions are saved in the namespace's `$context`.
+
+Changing the value of an existing key re-translates the languages whose translation came from the old value.
+Translations edited by hand are kept.
 
 ### Verify Translations (CI/CD)
 
@@ -161,7 +206,7 @@ jobs:
 - `-a, --auto-fill` - Auto-fill missing translations with the configured provider
 - `--api-key <key>` - API key for the configured provider (or set `DEEPL_API_KEY`, `GOOGLE_TRANSLATE_API_KEY` or `ANTHROPIC_API_KEY`)
 - `-l, --language <lang>` - Process only this language
-- `--limit <number>` - Max translations to process (default: 1000)
+- `--limit <number>` - Max translations to process (default: unlimited)
 - `--retranslate-changed` - Re-translate keys whose source value changed since last run (implies `--auto-fill`)
 - `--force` - Re-translate every key, even ones already translated (implies `--auto-fill`)
 - `--include-manual-edits` - Also replace translations someone edited by hand (skipped by default)
@@ -213,6 +258,7 @@ poly-lexis uses a `.translationsrc.json` file in your project root for configura
 
 ```json
 {
+  "$schema": "./node_modules/poly-lexis/dist/translations/core/translations-config.schema.json",
   "translationsPath": "public/static/locales",
   "languages": ["en", "es", "fr", "de"],
   "sourceLanguage": "en",
@@ -221,6 +267,29 @@ poly-lexis uses a `.translationsrc.json` file in your project root for configura
   "protectedTerms": ["MyBrand", "ProductName"]
 }
 ```
+
+A fuller example using context and Claude:
+
+```json
+{
+  "translationsPath": "public/static/locales",
+  "languages": ["en", "fr", "de", "ja"],
+  "sourceLanguage": "en",
+  "provider": "claude",
+  "fallbackProvider": "deepl",
+  "context": "Lush Spa is the internal tool spa staff use to manage treatments and bookings.",
+  "glossary": "../../translations.glossary.json",
+  "languageSettings": {
+    "fr": { "formality": "formal" },
+    "ja": { "formality": "formal", "instructions": ["Use です/ます form for buttons and labels"] }
+  },
+  "keyRoles": [{ "pattern": "_CHIP$", "role": "short filter chip label" }],
+  "claude": { "maxKeysPerRequest": 40, "codeContext": true }
+}
+```
+
+The config is checked when it's loaded. A wrong type, an unknown provider, or invalid JSON stops the command with
+the field and what it should be.
 
 ### Configuration Options
 
@@ -443,8 +512,9 @@ await addTranslationKey(process.cwd(), {
   namespace: 'common',
   key: 'HELLO',
   value: 'Hello',
+  note: 'Greeting at the top of the dashboard', // optional, saved in $context
   autoTranslate: true,
-  apiKey: process.env.DEEPL_API_KEY, // or GOOGLE_TRANSLATE_API_KEY
+  apiKey: process.env.DEEPL_API_KEY, // the configured provider's key; not needed for claude-code
 });
 ```
 
@@ -453,15 +523,14 @@ await addTranslationKey(process.cwd(), {
 ```typescript
 import { validateTranslations } from 'poly-lexis';
 
-const result = await validateTranslations(
-  '/path/to/translations',
-  ['en', 'es', 'fr'],
-  'en'
-);
+// Reads .translationsrc.json from the project root
+const result = validateTranslations(process.cwd());
 
 if (!result.valid) {
   console.log('Missing translations:', result.missing);
 }
+console.log('Stale translations:', result.stale);
+console.log('Context issues:', result.contextIssues);
 ```
 
 ### Generate TypeScript Types
@@ -479,11 +548,27 @@ import { autoFillTranslations } from 'poly-lexis';
 
 // The provider is automatically selected based on .translationsrc.json
 await autoFillTranslations(process.cwd(), {
-  apiKey: process.env.DEEPL_API_KEY, // or GOOGLE_TRANSLATE_API_KEY
-  limit: 1000,
+  apiKey: process.env.DEEPL_API_KEY, // the configured provider's key; not needed for claude-code
+  limit: 1000, // optional, default unlimited
   language: 'fr', // optional: auto-fill only this language
   dryRun: false, // optional: preview without saving
+  retranslateChanged: false, // optional: also refresh keys whose source changed
+  includeManualEdits: false, // optional: also replace translations edited by hand
 });
+```
+
+### Review Existing Translations
+
+```typescript
+import { applyReviewReport, reviewTranslations } from 'poly-lexis';
+
+// Needs a Claude provider. Writes translations-review.json and changes nothing else.
+const report = await reviewTranslations(process.cwd(), { language: 'fr' });
+console.log(report.entries); // { key, current, proposed, reason, ... }
+
+// Later, after deleting the entries you disagree with:
+const { applied, skipped } = applyReviewReport(process.cwd());
+// skipped entries have a skipReason: 'translation-changed' or 'source-changed'
 ```
 
 ### Using Custom Translation Providers
@@ -501,6 +586,32 @@ await autoFillTranslations(process.cwd(), {
   limit: 1000,
 });
 ```
+
+A provider with `translate()` gets one string per call, with its context as plain text in `options.context`.
+To translate whole batches with structured context, as Claude does, implement `ContextualTranslationProvider`:
+
+```typescript
+import {
+  setTranslationProvider,
+  type ContextualTranslationProvider,
+  type TranslationRequest,
+  type TranslationResponseItem,
+} from 'poly-lexis';
+
+const myProvider: ContextualTranslationProvider = {
+  name: 'my-llm', // recorded in .translations-meta.json
+  supports: { instructions: true, codeContext: true, review: false, maxItems: 50 },
+  async translateItems(request: TranslationRequest): Promise<TranslationResponseItem[]> {
+    // request.app, request.namespace, request.language, request.glossary, request.items[]
+    // Return { key, translation } for each item, or { key, translation: '', error } for one you couldn't translate
+    return request.items.map((item) => ({ key: item.key, translation: item.source }));
+  },
+};
+
+setTranslationProvider(myProvider);
+```
+
+Every result is checked before it's written: placeholders and do-not-translate terms must survive.
 
 ## Development
 
@@ -530,33 +641,53 @@ src/
 │   └── translations.ts       # CLI entry point
 └── translations/
     ├── cli/                  # CLI command implementations
-    │   ├── init.ts
+    │   ├── init.ts                   # config loading and validation
     │   ├── init-interactive.ts
     │   ├── add-key.ts
     │   ├── validate.ts
     │   ├── auto-fill.ts
+    │   ├── review.ts                 # review and review --apply
     │   ├── generate-types.ts
-    │   └── manage.ts
+    │   ├── find-unused.ts
+    │   ├── find-duplicates.ts
+    │   └── manage.ts                 # smart mode
     ├── core/                 # Core types and schemas
     │   ├── types.ts
     │   ├── schema.ts
     │   └── translations-config.schema.json
-    └── utils/                # Utility functions
-        ├── utils.ts
-        └── translator.ts
+    └── utils/
+        ├── translation-runner.ts     # batch, check, retry, fall back, write
+        ├── provider-factory.ts       # picks the provider from the config
+        ├── claude-provider.ts        # claude-api and claude-code
+        ├── contextual-provider.ts    # wraps DeepL/Google for batches with context
+        ├── deepl-translate-provider.ts
+        ├── google-translate-provider.ts
+        ├── key-context.ts            # UI roles, neighbours, placeholders
+        ├── source-context.ts         # $context blocks
+        ├── usage-index.ts            # where keys are used in code
+        ├── glossary.ts
+        ├── translation-checks.ts
+        ├── metadata.ts               # .translations-meta.json
+        └── utils.ts
 ```
 
 ## Requirements
 
 - Node.js 18+
-- (Optional) DeepL API key or Google Translate API key for auto-translation
+- For auto-translation, one of: a DeepL API key, a Google Translate API key, a Claude API key, or
+  [Claude Code](https://claude.com/claude-code) installed and signed in
 
 ## How It Works
 
 1. **Initialization**: Creates `.translationsrc.json` and translation directory structure with provider selection
-2. **Validation**: Compares all language files against source language to find missing keys
-3. **Auto-translation**: Uses DeepL or Google Translate API (based on config) to fill missing translations
-4. **Type Generation**: Creates TypeScript types from translation keys for autocomplete and type safety
+2. **Validation**: Compares all language files against the source language to find missing, empty, orphaned and
+   stale keys, and checks the `$context` blocks
+3. **Auto-translation**: Sends the keys that need translating, with their context, to the configured provider in
+   batches per namespace. Each result is checked, failures are retried and then sent to the fallback provider, and
+   each namespace file is written once. `.translations-meta.json` records how each translation was made, so later
+   runs spot changed source strings and hand edits
+4. **Review** (optional): Claude checks existing translations against their context and suggests corrections
+5. **Type Generation**: Creates TypeScript types from translation keys for autocomplete and type safety
 
 ## API Keys
 
@@ -570,6 +701,12 @@ src/
 2. Enable the Cloud Translation API
 3. Create credentials (API key)
 4. Set `GOOGLE_TRANSLATE_API_KEY` environment variable or pass via `--api-key` flag
+
+### Claude
+- **On your machine:** install [Claude Code](https://claude.com/claude-code) and run `claude` to sign in. With
+  `"provider": "claude"` or `"claude-code"` no key is needed; translations use your own sign-in.
+- **In CI:** create an API key in the [Claude Console](https://console.anthropic.com/), then set
+  `ANTHROPIC_API_KEY` or pass `--api-key`, with `"provider": "claude"` or `"claude-api"`.
 
 ## License
 

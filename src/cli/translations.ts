@@ -225,7 +225,7 @@ const { values, positionals } = parseArgs({
 
 if (values.help) {
   console.log(`
-Usage: translations [command] [options]
+Usage: poly-lexis [command] [options]
 
 Smart translation management - automatically handles initialization, validation,
 auto-filling, and type generation based on your project's current state.
@@ -264,54 +264,60 @@ Options (Review Mode):
   -n, --namespace <name>  Review only this namespace
   --output <file>         Report file (default: translations-review.json)
   --apply                 Apply the corrections in the report file
+  --include-manual-edits  Also review translations someone edited by hand
+  --api-key <key>         Claude API key (or set ANTHROPIC_API_KEY)
 
   (no options)            Interactive mode - prompts for all inputs
 
 Examples:
   # Smart mode - check and validate translations
-  translations
+  poly-lexis
 
   # Smart mode - validate and auto-fill missing translations (DeepL)
   export DEEPL_API_KEY=your_key
-  translations --auto-fill
+  poly-lexis --auto-fill
 
   # Smart mode - validate and auto-fill missing translations (Google)
   export GOOGLE_TRANSLATE_API_KEY=your_key
-  translations --auto-fill
+  poly-lexis --auto-fill
+
+  # Smart mode - auto-fill with Claude ("provider": "claude"): uses your Claude Code
+  # sign-in, or ANTHROPIC_API_KEY when Claude Code isn't signed in
+  poly-lexis --auto-fill
 
   # Smart mode - auto-fill only French translations
-  translations --auto-fill --language fr
+  poly-lexis --auto-fill --language fr
 
   # Preview what would be translated (dry-run)
-  translations --auto-fill --dry-run
+  poly-lexis --auto-fill --dry-run
 
   # Re-translate keys whose source string changed since last run
-  translations --auto-fill --retranslate-changed
+  poly-lexis --auto-fill --retranslate-changed
 
   # Re-translate everything from scratch
-  translations --auto-fill --force
+  poly-lexis --auto-fill --force
 
   # Add a new translation key (interactive mode)
-  translations add
+  poly-lexis add
 
   # Add with flags (non-interactive)
-  translations add --namespace common --key HELLO --value "Hello"
+  poly-lexis add --namespace common --key HELLO --value "Hello"
 
   # Add with auto-translation
-  translations add -n common -k WELCOME -v "Welcome" --auto-fill
+  poly-lexis add -n common -k WELCOME -v "Welcome" --auto-fill
 
   # Find unused translation keys
-  translations find-unused
+  poly-lexis find-unused
 
   # Find values duplicated from common namespace
-  translations find-duplicates
+  poly-lexis find-duplicates
 
   # Add a key with a note for translators
-  translations add -n treatments -k BOOK -v "Book" --note "Button that confirms the booking"
+  poly-lexis add -n treatments -k BOOK -v "Book" --note "Button that confirms the booking"
 
   # Review existing French translations, then apply the corrections you keep
-  translations review --language fr
-  translations review --apply
+  poly-lexis review --language fr
+  poly-lexis review --apply
 
 What happens in smart mode:
   1. Checks if translations are initialized (creates .translationsrc.json if needed)

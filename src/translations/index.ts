@@ -30,6 +30,7 @@ export * from './utils/glossary.js';
 export * from './utils/google-translate-provider.js';
 export * from './utils/key-context.js';
 export * from './utils/metadata.js';
+export * from './utils/provider-errors.js';
 export * from './utils/provider-factory.js';
 export * from './utils/source-context.js';
 export * from './utils/translation-checks.js';

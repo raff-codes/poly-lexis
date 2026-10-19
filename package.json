@@ -1,7 +1,7 @@
 {
   "name": "poly-lexis",
   "version": "1.0.0",
-  "description": "A powerful CLI and library for managing i18n translations with validation, auto-translation, and TypeScript type generation",
+  "description": "CLI and library for managing i18n translations: validation, context-aware auto-translation with DeepL, Google Translate or Claude, review of existing translations, and TypeScript type generation",
   "private": false,
   "type": "module",
   "main": "./dist/index.js",
@@ -43,6 +43,9 @@
     "localization",
     "l10n",
     "google-translate",
+    "deepl",
+    "claude",
+    "anthropic",
     "typescript",
     "cli"
   ],
