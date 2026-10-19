@@ -20,7 +20,7 @@
     "poly-lexis": "dist/cli/translations.js"
   },
   "scripts": {
-    "build": "tsup && node dist/scripts/generate-schema.js && mkdir -p dist/translations/core && cp src/translations/core/translations-config.schema.json dist/translations/core/",
+    "build": "tsup && node dist/scripts/generate-schema.js && biome format --write src/translations/core/translations-config.schema.json && mkdir -p dist/translations/core && cp src/translations/core/translations-config.schema.json dist/translations/core/",
     "dev": "tsc --noEmit --watch",
     "prepublishOnly": "npm run build",
     "lint": "biome check",
@@ -67,6 +67,7 @@
     "typescript": "^5"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.135.0",
     "@inquirer/prompts": "^8.0.2",
     "dotenv": "^17.2.2"
   }

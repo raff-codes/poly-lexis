@@ -1,8 +1,20 @@
 /**
  * Translation provider types
  */
-export const TRANSLATION_PROVIDERS = ['deepl', 'google'] as const;
+export const TRANSLATION_PROVIDERS = ['deepl', 'google', 'claude', 'claude-api', 'claude-code'] as const;
 export type TranslationProviderType = (typeof TRANSLATION_PROVIDERS)[number];
+
+/**
+ * Providers that can serve as a fallback. Claude is never a fallback: it is the
+ * provider you fall back from when it isn't available.
+ */
+export const FALLBACK_PROVIDERS = ['deepl', 'google'] as const;
+export type FallbackProviderType = (typeof FALLBACK_PROVIDERS)[number];
+
+/** Claude providers translate any language, so they skip the per-provider language lists */
+export function isClaudeProvider(provider: TranslationProviderType): boolean {
+  return provider === 'claude' || provider === 'claude-api' || provider === 'claude-code';
+}
 
 /**
  * DeepL supported target languages
@@ -224,9 +236,92 @@ export const TRANSLATION_CONFIG_SCHEMA = {
     },
     provider: {
       type: 'string',
-      description: 'Translation provider to use (deepl or google)',
+      description:
+        'Translation provider to use. "claude" uses the local Claude Code CLI when you are signed in, otherwise the Claude API when ANTHROPIC_API_KEY is set, otherwise fallbackProvider.',
       enum: TRANSLATION_PROVIDERS,
       default: 'deepl'
+    },
+    fallbackProvider: {
+      type: ['string', 'null'],
+      description: 'Provider to use when the main provider is unavailable or returns an unusable translation',
+      enum: [...FALLBACK_PROVIDERS, null],
+      default: null
+    },
+    context: {
+      type: 'string',
+      description:
+        'What the app is and who uses it, e.g. "Lush Spa is the internal tool spa staff use to manage treatments and bookings." Sent to the provider for every key.'
+    },
+    contextRequired: {
+      type: 'boolean',
+      description: 'Fail validation when a source namespace has no $context.description',
+      default: false
+    },
+    glossary: {
+      type: 'string',
+      description: 'Path to a shared glossary JSON file, relative to the project root',
+      examples: ['../../translations.glossary.json']
+    },
+    languageSettings: {
+      type: 'object',
+      description: 'Settings per target language',
+      additionalProperties: {
+        type: 'object',
+        properties: {
+          formality: {
+            type: 'string',
+            enum: ['formal', 'informal', 'default'],
+            description: 'Register to translate in'
+          },
+          instructions: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Style instructions for this language. Used by the Claude providers only.'
+          }
+        },
+        additionalProperties: false
+      }
+    },
+    keyRoles: {
+      type: 'array',
+      description: 'Extra key-name rules for inferring the UI role of a key. Checked before the built-in rules.',
+      items: {
+        type: 'object',
+        properties: {
+          pattern: { type: 'string', description: 'Regular expression tested against the key' },
+          role: { type: 'string', description: 'Role passed to the provider, e.g. "table column header"' }
+        },
+        required: ['pattern', 'role'],
+        additionalProperties: false
+      }
+    },
+    claude: {
+      type: 'object',
+      description: 'Settings for the claude, claude-api and claude-code providers',
+      properties: {
+        model: {
+          type: 'string',
+          description:
+            "Model to use. claude-api defaults to claude-opus-5-5; claude-code defaults to the user's Claude Code model"
+        },
+        maxKeysPerRequest: {
+          type: 'integer',
+          description: 'Maximum keys sent in one request',
+          default: 40
+        },
+        codeContext: {
+          type: 'boolean',
+          description:
+            'Send code snippets showing where each key is used along with the request. Turn off when source code must not be sent to Anthropic.',
+          default: true
+        },
+        serverFallbacks: {
+          type: 'boolean',
+          description:
+            'claude-api only: let the API retry a declined request on a fallback model. Defaults to on for the models known to support it.'
+        }
+      },
+      additionalProperties: false
     },
     useFallbackLanguages: {
       type: 'boolean',
@@ -292,6 +387,10 @@ export function isValidLanguageForProvider(lang: string, provider: TranslationPr
       return isValidDeepLLanguage(lang);
     case 'google':
       return isValidGoogleLanguage(lang);
+    case 'claude':
+    case 'claude-api':
+    case 'claude-code':
+      return isValidLanguage(lang);
     default:
       return false;
   }
@@ -337,6 +436,10 @@ export function getSupportedLanguages(provider: TranslationProviderType): readon
       return DEEPL_LANGUAGES;
     case 'google':
       return GOOGLE_LANGUAGES;
+    case 'claude':
+    case 'claude-api':
+    case 'claude-code':
+      return SUPPORTED_LANGUAGES;
     default:
       return [];
   }

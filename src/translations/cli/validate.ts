@@ -1,5 +1,11 @@
 import * as path from 'node:path';
-import type { MissingTranslation, OrphanedTranslation, StaleTranslation, ValidationResult } from '../core/types.js';
+import type {
+  ContextIssue,
+  MissingTranslation,
+  OrphanedTranslation,
+  StaleTranslation,
+  ValidationResult
+} from '../core/types.js';
 import {
   getSourceHash,
   hashSourceValue,
@@ -8,6 +14,7 @@ import {
   setSourceHash,
   writeMetadata
 } from '../utils/metadata.js';
+import { findContextIssues, readNamespaceContexts } from '../utils/source-context.js';
 import { getNamespaces, readTranslations, syncTranslationStructure } from '../utils/utils.js';
 import { loadConfig } from './init.js';
 
@@ -116,9 +123,30 @@ export function validateTranslations(projectRoot: string = process.cwd()): Valid
     }
   }
 
+  // Context written in the source files' $context entries
+  const contextIssues: ContextIssue[] = findContextIssues(
+    readNamespaceContexts(translationsPath, sourceLanguage),
+    sourceTranslations,
+    // Missing descriptions are only worth reporting to projects that use context
+    { requireDescriptions: config.contextRequired || !!config.context.trim() }
+  );
+  const contextBlocksValidity = config.contextRequired && contextIssues.length > 0;
+
   // Stale translations are surfaced as a warning and do not, on their own,
   // make the translation set invalid (the keys are still present and non-empty).
-  const valid = !missing.length && !empty.length && !orphaned.length;
+  // Context issues only count when the config requires context.
+  const valid = !missing.length && !empty.length && !orphaned.length && !contextBlocksValidity;
+
+  if (contextIssues.length > 0) {
+    const label = config.contextRequired ? '⚠' : 'ℹ';
+    console.log(`\n${label} Found ${contextIssues.length} translation context issues:`);
+    for (const issue of contextIssues.slice(0, 10)) {
+      console.log(`  ${sourceLanguage}/${issue.namespace}.json -> ${issue.message}`);
+    }
+    if (contextIssues.length > 10) {
+      console.log(`  ... and ${contextIssues.length - 10} more`);
+    }
+  }
 
   if (valid && !stale.length) {
     console.log('✓ All translations are valid!');
@@ -169,7 +197,7 @@ export function validateTranslations(projectRoot: string = process.cwd()): Valid
 
   console.log('=====');
 
-  return { valid, missing, empty, orphaned, stale };
+  return { valid, missing, empty, orphaned, stale, contextIssues };
 }
 
 export type FillableType = 'missing' | 'empty' | 'stale';
@@ -259,7 +287,11 @@ export function ensureBaselineMetadata(projectRoot: string = process.cwd()): Bas
         const alreadyTracked = getSourceHash(metadata, language, namespace, key) !== undefined;
 
         if (alreadyTranslated && !alreadyTracked) {
-          setSourceHash(metadata, language, namespace, key, sourceValue);
+          // Recording the current value lets later runs tell a hand edit from this baseline
+          setSourceHash(metadata, language, namespace, key, sourceValue, {
+            translation: targetValue,
+            provider: 'baseline'
+          });
           recorded++;
         }
       }

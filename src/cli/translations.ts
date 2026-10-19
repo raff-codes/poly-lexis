@@ -7,7 +7,146 @@ import { addTranslationKey } from '../translations/cli/add-key.js';
 import { loadConfig } from '../translations/cli/init.js';
 import { initTranslationsInteractive } from '../translations/cli/init-interactive.js';
 import { manageTranslations } from '../translations/cli/manage.js';
+import type { TranslationProviderType } from '../translations/core/schema.js';
+import { getApiKeyEnvVar } from '../translations/utils/provider-factory.js';
+import { readNamespaceContexts } from '../translations/utils/source-context.js';
 import { getNamespaces } from '../translations/utils/utils.js';
+
+/**
+ * API key from --api-key or the configured provider's environment variable.
+ * `missingEnvVar` names the variable to set when the provider needs a key and none was found.
+ */
+function resolveApiKey(
+  provider: TranslationProviderType,
+  flagValue?: string
+): { apiKey?: string; missingEnvVar?: string } {
+  const envVar = getApiKeyEnvVar(provider);
+  const apiKey = flagValue || (envVar ? process.env[envVar] : undefined);
+  return { apiKey, missingEnvVar: envVar && !apiKey ? envVar : undefined };
+}
+
+/** Optional context prompts for the interactive add flow */
+async function promptForContext(askForDescription: boolean): Promise<{ description?: string; note?: string }> {
+  const description = askForDescription
+    ? await input({
+        message: 'Describe this namespace for translators (which screen or feature):'
+      })
+    : '';
+  const note = await input({
+    message: 'Note for translators about this key (optional, e.g. "Button that confirms the booking"):'
+  });
+  return {
+    ...(description.trim() && { description: description.trim() }),
+    ...(note.trim() && { note: note.trim() })
+  };
+}
+
+/** Namespace names are file names: lowercase letters, numbers and hyphens */
+function validateNamespaceName(value: string): string | true {
+  if (!value.trim()) return 'Namespace is required';
+  if (!/^[a-z0-9-]+$/.test(value)) {
+    return 'Namespace must contain only lowercase letters, numbers, and hyphens';
+  }
+  return true;
+}
+
+/** Ask for an existing namespace or a new one's name; `isNew` drives the description prompt */
+async function promptForNamespace(existingNamespaces: string[]): Promise<{ namespace: string; isNew: boolean }> {
+  if (!existingNamespaces.length) {
+    const namespace = await input({
+      message: 'Enter namespace name (e.g., common, members):',
+      default: 'common',
+      validate: validateNamespaceName
+    });
+    return { namespace, isNew: true };
+  }
+
+  const choice = await select({
+    message: 'Select namespace:',
+    choices: [
+      ...existingNamespaces.map((ns) => ({ name: ns, value: ns })),
+      { name: '➕ Create new namespace', value: '__new__' }
+    ]
+  });
+  if (choice !== '__new__') {
+    return { namespace: choice, isNew: false };
+  }
+
+  const namespace = await input({ message: 'Enter new namespace name:', validate: validateNamespaceName });
+  return { namespace, isNew: true };
+}
+
+/**
+ * The interactive add flow shared by `add` with no flags and the menu: offers
+ * to initialise, prompts for the key and its context, then adds it.
+ */
+async function addKeyInteractively(apiKeyFlag?: string): Promise<void> {
+  if (!fs.existsSync(path.join(process.cwd(), '.translationsrc.json'))) {
+    console.log('⚠️  Translation structure not initialized.');
+    const shouldInit = await confirm({
+      message: 'Would you like to initialize it now?',
+      default: true
+    });
+
+    if (!shouldInit) {
+      console.log('❌ Cannot add translations without initialization.');
+      process.exit(1);
+    }
+    await initTranslationsInteractive(process.cwd());
+    console.log();
+  }
+
+  const config = loadConfig(process.cwd());
+  const translationsPath = path.join(process.cwd(), config.translationsPath);
+  const { namespace, isNew } = await promptForNamespace(getNamespaces(translationsPath, config.sourceLanguage));
+
+  const key = await input({
+    message: 'Enter translation key (UPPERCASE_SNAKE_CASE):',
+    validate: (value) => {
+      if (!value.trim()) return 'Key is required';
+      if (!/^[A-Z0-9_]+$/.test(value.toUpperCase())) {
+        return 'Key must be SNAKE_CASE (e.g., SAVE_CHANGES)';
+      }
+      return true;
+    },
+    transformer: (value) => value.toUpperCase()
+  });
+
+  const value = await input({
+    message: `Enter ${config.sourceLanguage.toUpperCase()} translation:`,
+    validate: (value) => {
+      if (!value.trim()) return 'Translation value is required';
+      return true;
+    }
+  });
+
+  // Also ask when an existing namespace was never described, so adding a key fills the gap
+  const hasDescription = !!readNamespaceContexts(translationsPath, config.sourceLanguage)[namespace]?.context
+    .description;
+  const context = await promptForContext(isNew || !hasDescription);
+
+  const autoTranslate = await confirm({
+    message: `Auto-translate to ${config.languages.length - 1} other languages?`,
+    default: true
+  });
+
+  const { apiKey, missingEnvVar } = resolveApiKey(config.provider, apiKeyFlag);
+  if (autoTranslate && missingEnvVar) {
+    console.log(`\n⚠️  ${missingEnvVar} environment variable not found.`);
+    console.log('Skipping auto-translation. Set this variable to enable auto-translation.\n');
+  }
+
+  console.log();
+
+  await addTranslationKey(process.cwd(), {
+    namespace,
+    key: key.toUpperCase(),
+    value,
+    ...context,
+    autoTranslate: autoTranslate && !missingEnvVar,
+    apiKey
+  });
+}
 
 const { values, positionals } = parseArgs({
   options: {
@@ -59,6 +198,23 @@ const { values, positionals } = parseArgs({
       type: 'string',
       short: 'v'
     },
+    note: {
+      type: 'string'
+    },
+    description: {
+      type: 'string'
+    },
+    apply: {
+      type: 'boolean',
+      default: false
+    },
+    output: {
+      type: 'string'
+    },
+    'include-manual-edits': {
+      type: 'boolean',
+      default: false
+    },
     help: {
       type: 'boolean',
       short: 'h'
@@ -79,15 +235,18 @@ Commands:
   add                 Add a new translation key
   find-unused         Find translation keys that are not used in the codebase
   find-duplicates     Find values duplicated from the common namespace
+  review              Check existing translations against their context (Claude providers)
 
 Options (Smart Mode):
-  -a, --auto-fill         Auto-fill missing translations with DeepL or Google Translate
-  --api-key <key>         Translation API key (or set DEEPL_API_KEY/GOOGLE_TRANSLATE_API_KEY)
+  -a, --auto-fill         Auto-fill missing translations with the configured provider
+  --api-key <key>         API key for the configured provider (or set DEEPL_API_KEY,
+                          GOOGLE_TRANSLATE_API_KEY or ANTHROPIC_API_KEY)
   -l, --language <lang>   Process only this language
   --limit <number>        Max translations to process (default: unlimited)
   --concurrency <number>  Number of concurrent translation requests (default: 5)
   --retranslate-changed   Re-translate keys whose source value has changed since last run
   --force                 Re-translate every key, even ones already translated
+  --include-manual-edits  Also replace translations someone edited by hand
   --skip-types            Skip TypeScript type generation
   -d, --dry-run           Preview changes without saving
   -h, --help              Show this help
@@ -96,7 +255,15 @@ Options (Add Mode):
   -n, --namespace <name>  Namespace for the translation
   -k, --key <key>         Translation key
   -v, --value <value>     Translation value in source language
+  --note <text>           Note for translators about this key (saved in $context)
+  --description <text>    Description of the namespace (saved in $context)
   -a, --auto-fill         Auto-translate to all languages
+
+Options (Review Mode):
+  -l, --language <lang>   Review only this language
+  -n, --namespace <name>  Review only this namespace
+  --output <file>         Report file (default: translations-review.json)
+  --apply                 Apply the corrections in the report file
 
   (no options)            Interactive mode - prompts for all inputs
 
@@ -138,6 +305,13 @@ Examples:
 
   # Find values duplicated from common namespace
   translations find-duplicates
+
+  # Add a key with a note for translators
+  translations add -n treatments -k BOOK -v "Book" --note "Button that confirms the booking"
+
+  # Review existing French translations, then apply the corrections you keep
+  translations review --language fr
+  translations review --apply
 
 What happens in smart mode:
   1. Checks if translations are initialized (creates .translationsrc.json if needed)
@@ -183,6 +357,35 @@ else if (command === 'find-duplicates') {
     }
   })();
 }
+// Handle 'review' command
+else if (command === 'review') {
+  (async () => {
+    try {
+      const { applyReviewReport, reviewTranslations } = await import('../translations/cli/review.js');
+
+      if (values.apply) {
+        const result = applyReviewReport(process.cwd(), values.output);
+        if (result.skipped.length > 0) {
+          process.exit(1);
+        }
+        return;
+      }
+
+      const config = loadConfig(process.cwd());
+      await reviewTranslations(process.cwd(), {
+        language: values.language,
+        namespace: values.namespace,
+        apiKey: resolveApiKey(config.provider, values['api-key']).apiKey,
+        concurrency: Number.parseInt(values.concurrency || '5', 10),
+        outputPath: values.output,
+        includeManualEdits: values['include-manual-edits']
+      });
+    } catch (error) {
+      console.error('Error:', error instanceof Error ? error.message : error);
+      process.exit(1);
+    }
+  })();
+}
 // Handle 'add' command
 else if (command === 'add') {
   // Interactive mode if no options provided
@@ -191,119 +394,7 @@ else if (command === 'add') {
       try {
         console.log('\n✨ Add a new translation key\n');
 
-        // Check if initialized
-        const configPath = path.join(process.cwd(), '.translationsrc.json');
-        const isInitialized = fs.existsSync(configPath);
-
-        if (!isInitialized) {
-          console.log('⚠️  Translation structure not initialized.');
-          const shouldInit = await confirm({
-            message: 'Would you like to initialize it now?',
-            default: true
-          });
-
-          if (shouldInit) {
-            await initTranslationsInteractive(process.cwd());
-            console.log();
-          } else {
-            console.log('❌ Cannot add translations without initialization.');
-            process.exit(1);
-          }
-        }
-
-        // Load config to get existing namespaces
-        const config = loadConfig(process.cwd());
-        const translationsPath = path.join(process.cwd(), config.translationsPath);
-        const existingNamespaces = getNamespaces(translationsPath, config.sourceLanguage);
-
-        // Prompt for namespace
-        let namespace: string;
-        if (existingNamespaces.length > 0) {
-          const namespaceChoice = await select({
-            message: 'Select namespace:',
-            choices: [
-              ...existingNamespaces.map((ns) => ({ name: ns, value: ns })),
-              { name: '➕ Create new namespace', value: '__new__' }
-            ]
-          });
-
-          if (namespaceChoice === '__new__') {
-            namespace = await input({
-              message: 'Enter new namespace name:',
-              validate: (value) => {
-                if (!value.trim()) return 'Namespace is required';
-                if (!/^[a-z0-9-]+$/.test(value)) {
-                  return 'Namespace must contain only lowercase letters, numbers, and hyphens';
-                }
-                return true;
-              }
-            });
-          } else {
-            namespace = namespaceChoice;
-          }
-        } else {
-          namespace = await input({
-            message: 'Enter namespace name (e.g., common, members):',
-            default: 'common',
-            validate: (value) => {
-              if (!value.trim()) return 'Namespace is required';
-              if (!/^[a-z0-9-]+$/.test(value)) {
-                return 'Namespace must contain only lowercase letters, numbers, and hyphens';
-              }
-              return true;
-            }
-          });
-        }
-
-        // Prompt for key
-        const key = await input({
-          message: 'Enter translation key (UPPERCASE_SNAKE_CASE):',
-          validate: (value) => {
-            if (!value.trim()) return 'Key is required';
-            if (!/^[A-Z0-9_]+$/.test(value.toUpperCase())) {
-              return 'Key must be SNAKE_CASE (e.g., SAVE_CHANGES)';
-            }
-            return true;
-          },
-          transformer: (value) => value.toUpperCase()
-        });
-
-        // Prompt for value
-        const value = await input({
-          message: `Enter ${config.sourceLanguage.toUpperCase()} translation:`,
-          validate: (value) => {
-            if (!value.trim()) return 'Translation value is required';
-            return true;
-          }
-        });
-
-        // Ask about auto-translation
-        const autoTranslate = await confirm({
-          message: `Auto-translate to ${config.languages.length - 1} other languages?`,
-          default: true
-        });
-
-        let apiKey: string | undefined;
-        if (autoTranslate) {
-          const provider = config.provider || 'deepl';
-          const envVarName = provider === 'google' ? 'GOOGLE_TRANSLATE_API_KEY' : 'DEEPL_API_KEY';
-          apiKey = values['api-key'] || process.env[envVarName];
-          if (!apiKey) {
-            console.log(`\n⚠️  ${envVarName} environment variable not found.`);
-            console.log('Skipping auto-translation. Set this variable to enable auto-translation.\n');
-          }
-        }
-
-        console.log();
-
-        // Add the translation
-        await addTranslationKey(process.cwd(), {
-          namespace,
-          key: key.toUpperCase(),
-          value,
-          autoTranslate: autoTranslate && !!apiKey,
-          apiKey
-        });
+        await addKeyInteractively(values['api-key']);
 
         console.log('\n💡 Run "translations" to validate and generate types');
       } catch (error) {
@@ -324,12 +415,10 @@ else if (command === 'add') {
     }
 
     const config = loadConfig(process.cwd());
-    const provider = config.provider || 'deepl';
-    const envVarName = provider === 'google' ? 'GOOGLE_TRANSLATE_API_KEY' : 'DEEPL_API_KEY';
-    const apiKey = values['api-key'] || process.env[envVarName];
+    const { apiKey, missingEnvVar } = resolveApiKey(config.provider, values['api-key']);
 
-    if (values['auto-fill'] && !apiKey) {
-      console.error(`Error: --api-key or ${envVarName} environment variable is required for auto-translation`);
+    if (values['auto-fill'] && missingEnvVar) {
+      console.error(`Error: --api-key or ${missingEnvVar} environment variable is required for auto-translation`);
       process.exit(1);
     }
 
@@ -337,6 +426,8 @@ else if (command === 'add') {
       namespace: values.namespace,
       key: values.key,
       value: values.value,
+      note: values.note,
+      description: values.description,
       autoTranslate: values['auto-fill'],
       apiKey
     })
@@ -360,15 +451,14 @@ else if (command === 'add') {
     values['skip-types'] ||
     values['dry-run'] ||
     values['retranslate-changed'] ||
-    values.force;
+    values.force ||
+    values['include-manual-edits'];
 
   if (hasFlags) {
     // Flag mode - run with provided options
     const configPath = path.join(process.cwd(), '.translationsrc.json');
-    const config = fs.existsSync(configPath) ? loadConfig(process.cwd()) : { provider: 'deepl' };
-    const provider = config.provider || 'deepl';
-    const envVarName = provider === 'google' ? 'GOOGLE_TRANSLATE_API_KEY' : 'DEEPL_API_KEY';
-    const apiKey = values['api-key'] || process.env[envVarName];
+    const provider: TranslationProviderType = fs.existsSync(configPath) ? loadConfig(process.cwd()).provider : 'deepl';
+    const { apiKey } = resolveApiKey(provider, values['api-key']);
     const limit = values.limit ? Number.parseInt(values.limit, 10) : undefined;
     const concurrency = Number.parseInt(values.concurrency || '5', 10);
 
@@ -384,7 +474,8 @@ else if (command === 'add') {
       skipTypes: values['skip-types'],
       dryRun: values['dry-run'],
       retranslateChanged: values['retranslate-changed'],
-      force: values.force
+      force: values.force,
+      includeManualEdits: values['include-manual-edits']
     })
       .then((isValid) => {
         if (!isValid) {
@@ -399,9 +490,6 @@ else if (command === 'add') {
     // Interactive menu mode - show options
     (async () => {
       try {
-        const configPath = path.join(process.cwd(), '.translationsrc.json');
-        const isInitialized = fs.existsSync(configPath);
-
         console.log('\n🌍 Translation Management\n');
 
         const action = await select({
@@ -430,7 +518,12 @@ else if (command === 'add') {
             {
               name: '🤖 Auto-fill missing translations',
               value: 'autofill',
-              description: 'Automatically translate missing keys with DeepL or Google Translate'
+              description: 'Automatically translate missing keys with the configured provider'
+            },
+            {
+              name: '🧐 Review existing translations',
+              value: 'review',
+              description: 'Check translations against their context and write suggested corrections'
             },
             {
               name: '📝 Generate TypeScript types',
@@ -453,111 +546,7 @@ else if (command === 'add') {
         console.log();
 
         if (action === 'add') {
-          // Run add command in interactive mode
-          if (!isInitialized) {
-            console.log('⚠️  Translation structure not initialized.');
-            const shouldInit = await confirm({
-              message: 'Would you like to initialize it now?',
-              default: true
-            });
-
-            if (shouldInit) {
-              await initTranslationsInteractive(process.cwd());
-              console.log();
-            } else {
-              console.log('❌ Cannot add translations without initialization.');
-              process.exit(1);
-            }
-          }
-
-          const config = loadConfig(process.cwd());
-          const translationsPath = path.join(process.cwd(), config.translationsPath);
-          const existingNamespaces = getNamespaces(translationsPath, config.sourceLanguage);
-
-          let namespace: string;
-          if (existingNamespaces.length > 0) {
-            const namespaceChoice = await select({
-              message: 'Select namespace:',
-              choices: [
-                ...existingNamespaces.map((ns) => ({ name: ns, value: ns })),
-                { name: '➕ Create new namespace', value: '__new__' }
-              ]
-            });
-
-            if (namespaceChoice === '__new__') {
-              namespace = await input({
-                message: 'Enter new namespace name:',
-                validate: (value) => {
-                  if (!value.trim()) return 'Namespace is required';
-                  if (!/^[a-z0-9-]+$/.test(value)) {
-                    return 'Namespace must contain only lowercase letters, numbers, and hyphens';
-                  }
-                  return true;
-                }
-              });
-            } else {
-              namespace = namespaceChoice;
-            }
-          } else {
-            namespace = await input({
-              message: 'Enter namespace name (e.g., common, members):',
-              default: 'common',
-              validate: (value) => {
-                if (!value.trim()) return 'Namespace is required';
-                if (!/^[a-z0-9-]+$/.test(value)) {
-                  return 'Namespace must contain only lowercase letters, numbers, and hyphens';
-                }
-                return true;
-              }
-            });
-          }
-
-          const key = await input({
-            message: 'Enter translation key (UPPERCASE_SNAKE_CASE):',
-            validate: (value) => {
-              if (!value.trim()) return 'Key is required';
-              if (!/^[A-Z0-9_]+$/.test(value.toUpperCase())) {
-                return 'Key must be SNAKE_CASE (e.g., SAVE_CHANGES)';
-              }
-              return true;
-            },
-            transformer: (value) => value.toUpperCase()
-          });
-
-          const value = await input({
-            message: `Enter ${config.sourceLanguage.toUpperCase()} translation:`,
-            validate: (value) => {
-              if (!value.trim()) return 'Translation value is required';
-              return true;
-            }
-          });
-
-          // Ask about auto-translation
-          const autoTranslate = await confirm({
-            message: `Auto-translate to ${config.languages.length - 1} other languages?`,
-            default: true
-          });
-
-          let apiKey: string | undefined;
-          if (autoTranslate) {
-            const provider = config.provider || 'deepl';
-            const envVarName = provider === 'google' ? 'GOOGLE_TRANSLATE_API_KEY' : 'DEEPL_API_KEY';
-            apiKey = process.env[envVarName];
-            if (!apiKey) {
-              console.log(`\n⚠️  ${envVarName} environment variable not found.`);
-              console.log('Skipping auto-translation. Set this variable to enable auto-translation.\n');
-            }
-          }
-
-          console.log();
-
-          await addTranslationKey(process.cwd(), {
-            namespace,
-            key: key.toUpperCase(),
-            value,
-            autoTranslate: autoTranslate && !!apiKey,
-            apiKey
-          });
+          await addKeyInteractively();
 
           console.log('\n💡 Run "translations" again to validate and generate types');
         } else if (action === 'init') {
@@ -568,11 +557,9 @@ else if (command === 'add') {
           });
         } else if (action === 'autofill') {
           const config = loadConfig(process.cwd());
-          const provider = config.provider || 'deepl';
-          const envVarName = provider === 'google' ? 'GOOGLE_TRANSLATE_API_KEY' : 'DEEPL_API_KEY';
-          const apiKey = process.env[envVarName];
-          if (!apiKey) {
-            console.log(`⚠️  ${envVarName} environment variable not found.`);
+          const { apiKey, missingEnvVar } = resolveApiKey(config.provider);
+          if (missingEnvVar) {
+            console.log(`⚠️  ${missingEnvVar} environment variable not found.`);
             console.log('Please set it to enable auto-translation.\n');
             process.exit(1);
           }
@@ -594,6 +581,10 @@ else if (command === 'add') {
               retranslateChanged
             });
           }
+        } else if (action === 'review') {
+          const { reviewTranslations } = await import('../translations/cli/review.js');
+          const config = loadConfig(process.cwd());
+          await reviewTranslations(process.cwd(), { apiKey: resolveApiKey(config.provider).apiKey });
         } else if (action === 'find-unused') {
           const { findUnusedKeys, printUnusedKeysResult } = await import('../translations/cli/find-unused.js');
           const result = findUnusedKeys(process.cwd());

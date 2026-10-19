@@ -180,7 +180,8 @@ describe('Find Unused Translation Keys', () => {
     const result = findUnusedKeys(testDir);
 
     // Assert
-    expect(result.searchedFiles).toBe(2);
+    // -1 means ripgrep searched instead of the native walker, which counts files
+    expect([2, -1]).toContain(result.searchedFiles);
     expect(result.unused.length).toBe(1);
     expect(result.unused[0].key).toBe('UNUSED_KEY');
   });

@@ -2,6 +2,7 @@ import { execSync, spawnSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type { UnusedKeysResult, UnusedTranslation } from '../core/types.js';
+import { findFiles } from '../utils/source-files.js';
 import { getNamespaces, readTranslations } from '../utils/utils.js';
 import { loadConfig } from './init.js';
 
@@ -61,63 +62,6 @@ function searchWithRipgrep(key: string, searchPaths: string[], extensions: strin
     // Fallback to slower method if ripgrep fails
     return false;
   }
-}
-
-/**
- * Recursively find all files matching the given extensions (fallback method)
- */
-function findFiles(rootDir: string, searchPaths: string[], extensions: string[]): string[] {
-  const files: string[] = [];
-  const extensionSet = new Set(extensions);
-
-  // Directories to exclude from search
-  const excludeDirs = new Set([
-    'node_modules',
-    'dist',
-    'build',
-    '.next',
-    '.nuxt',
-    'out',
-    'coverage',
-    '.git',
-    '.svelte-kit',
-    '.vercel',
-    '.turbo',
-    'public',
-    'static'
-  ]);
-
-  function scanDirectory(dir: string): void {
-    try {
-      const entries = fs.readdirSync(dir, { withFileTypes: true });
-
-      for (const entry of entries) {
-        const fullPath = path.join(dir, entry.name);
-
-        if (entry.isDirectory()) {
-          if (!excludeDirs.has(entry.name)) {
-            scanDirectory(fullPath);
-          }
-        } else if (entry.isFile()) {
-          const ext = path.extname(entry.name);
-          if (extensionSet.has(ext)) {
-            files.push(fullPath);
-          }
-        }
-      }
-    } catch (error) {
-      // Skip directories we can't read
-    }
-  }
-
-  for (const searchPath of searchPaths) {
-    const fullSearchPath = path.join(rootDir, searchPath);
-    if (fs.existsSync(fullSearchPath)) {
-      scanDirectory(fullSearchPath);
-    }
-  }
-
-  return files;
 }
 
 /**

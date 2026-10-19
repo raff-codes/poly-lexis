@@ -1,15 +1,23 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { ProviderUnavailableError } from '../utils/provider-factory.js';
 import { syncTranslationStructure } from '../utils/utils.js';
 import { autoFillTranslations } from './auto-fill.js';
 import { generateTranslationTypes } from './generate-types.js';
 import { initTranslations, loadConfig } from './init.js';
 import { ensureBaselineMetadata, validateTranslations } from './validate.js';
 
+/** Translation requests run in parallel */
+const DEFAULT_CONCURRENCY = 5;
+/** Pause between requests for providers that translate one string per request */
+const AUTO_FILL_DELAY_MS = 50;
+
+type AutoFillOptions = NonNullable<Parameters<typeof autoFillTranslations>[1]>;
+
 export interface ManageTranslationsOptions {
   /** Auto-fill missing translations */
   autoFill?: boolean;
-  /** Google Translate API key for auto-fill */
+  /** API key for the configured provider (DeepL, Google Translate or the Claude API) */
   apiKey?: string;
   /** Maximum translations to fill */
   limit?: number;
@@ -25,7 +33,45 @@ export interface ManageTranslationsOptions {
   retranslateChanged?: boolean;
   /** Re-translate every key, regardless of current value */
   force?: boolean;
+  /** Also replace translations someone edited by hand */
+  includeManualEdits?: boolean;
 }
+
+/**
+ * Run auto-fill and re-validate afterwards. Returns false when the provider
+ * couldn't start (missing key, Claude Code not signed in), so the run carries on.
+ */
+const runAutoFill = async (
+  projectRoot: string,
+  options: AutoFillOptions & { totalMissing: number; staleCount: number }
+): Promise<boolean> => {
+  const { totalMissing, staleCount, ...autoFillOptions } = options;
+  try {
+    if (autoFillOptions.force) {
+      console.log('\n🤖 Force re-translating all keys...\n');
+    } else {
+      console.log(`\n🤖 Auto-filling ${totalMissing} missing and ${staleCount} changed translations...\n`);
+    }
+    await autoFillTranslations(projectRoot, autoFillOptions);
+
+    // Re-validate after auto-fill
+    if (!autoFillOptions.dryRun) {
+      console.log('\n🔍 Re-validating after auto-fill...\n');
+      const revalidation = validateTranslations(projectRoot);
+      if (revalidation.valid && !revalidation.stale.length) {
+        console.log('\n✅ All translations are now complete!\n');
+      }
+    }
+    return true;
+  } catch (error) {
+    // Only a provider that couldn't start (missing key, Claude Code not signed in) is a skip
+    if (!(error instanceof ProviderUnavailableError)) {
+      throw error;
+    }
+    console.log(`\n⚠️  Auto-fill skipped: ${error.message}\n`);
+    return false;
+  }
+};
 
 /**
  * Smart translation management - handles init, validation, auto-fill, and type generation
@@ -40,12 +86,13 @@ export async function manageTranslations(
     autoFill = false,
     apiKey,
     limit,
-    concurrency = 5,
+    concurrency = DEFAULT_CONCURRENCY,
     language,
     skipTypes = false,
     dryRun = false,
     retranslateChanged = false,
-    force = false
+    force = false,
+    includeManualEdits = false
   } = options;
 
   console.log('=====');
@@ -69,9 +116,9 @@ export async function manageTranslations(
   const translationsPath = path.join(projectRoot, config.translationsPath);
 
   // Check if source language directory exists
-  const sourceLangPath = path.join(translationsPath, config.sourceLanguage);
-  if (!fs.existsSync(sourceLangPath)) {
-    console.log(`⚠️  Source language directory not found: ${sourceLangPath}`);
+  const sourceLanguagePath = path.join(translationsPath, config.sourceLanguage);
+  if (!fs.existsSync(sourceLanguagePath)) {
+    console.log(`⚠️  Source language directory not found: ${sourceLanguagePath}`);
     console.log('Please add translation files to the source language directory.\n');
     return false;
   }
@@ -80,23 +127,19 @@ export async function manageTranslations(
   console.log('🔄 Synchronizing translation structure...\n');
   const syncResult = syncTranslationStructure(translationsPath, config.languages, config.sourceLanguage);
 
-  if (syncResult.createdFiles.length > 0) {
+  if (syncResult.createdFiles.length) {
     console.log(`✓ Created ${syncResult.createdFiles.length} namespace files\n`);
   }
 
-  if (syncResult.removedNamespaces.length > 0) {
+  if (syncResult.removedNamespaces.length) {
     console.log(`✓ Removed ${syncResult.removedNamespaces.length} orphaned namespace files\n`);
   }
 
-  if (syncResult.cleanedKeys.length > 0) {
+  if (syncResult.cleanedKeys.length) {
     console.log(`✓ Removed ${syncResult.cleanedKeys.length} orphaned keys from translation files\n`);
   }
 
-  if (
-    syncResult.createdFiles.length === 0 &&
-    syncResult.cleanedKeys.length === 0 &&
-    syncResult.removedNamespaces.length === 0
-  ) {
+  if (!syncResult.createdFiles.length && !syncResult.cleanedKeys.length && !syncResult.removedNamespaces.length) {
     console.log('✓ Translation structure is already synchronized\n');
   }
 
@@ -106,7 +149,7 @@ export async function manageTranslations(
   // validation so genuinely stale keys (already tracked) are still flagged.
   if (!dryRun) {
     const baseline = ensureBaselineMetadata(projectRoot);
-    if (baseline.recorded > 0) {
+    if (baseline.recorded) {
       const verb = baseline.created ? 'Created change-tracking baseline for' : 'Added change tracking for';
       console.log(`📌 ${verb} ${baseline.recorded} existing translations\n`);
     }
@@ -118,7 +161,7 @@ export async function manageTranslations(
 
   // Auto-fill should also run when there is nothing missing/empty but the user
   // asked to re-translate changed (stale) keys or to force a full re-translation.
-  const hasWorkToFill = !validationResult.valid || force || (retranslateChanged && validationResult.stale.length > 0);
+  const hasWorkToFill = !validationResult.valid || force || (retranslateChanged && !!validationResult.stale.length);
 
   if (validationResult.valid && !validationResult.stale.length) {
     console.log('\n✅ All translations are complete!\n');
@@ -126,49 +169,28 @@ export async function manageTranslations(
     console.log(`\n⚠️  ${validationResult.stale.length} translations may be outdated.\n`);
   }
 
-  if (hasWorkToFill) {
-    const totalMissing =
-      validationResult.missing.length + validationResult.empty.length + validationResult.orphaned.length;
+  // Step 4: Auto-fill if requested
+  const autoFillRan =
+    hasWorkToFill &&
+    autoFill &&
+    (await runAutoFill(projectRoot, {
+      apiKey,
+      limit,
+      concurrency,
+      language,
+      dryRun,
+      delayMs: AUTO_FILL_DELAY_MS,
+      retranslateChanged,
+      force,
+      includeManualEdits,
+      totalMissing: validationResult.missing.length + validationResult.empty.length + validationResult.orphaned.length,
+      staleCount: retranslateChanged ? validationResult.stale.length : 0
+    }));
 
-    // Step 4: Auto-fill if requested
-    if (autoFill) {
-      if (!apiKey) {
-        const provider = config.provider || 'deepl';
-        const envVarName = provider === 'google' ? 'GOOGLE_TRANSLATE_API_KEY' : 'DEEPL_API_KEY';
-        console.log('\n⚠️  Auto-fill requested but no API key provided.');
-        console.log(`Set ${envVarName} or pass --api-key to enable auto-fill.\n`);
-      } else {
-        if (force) {
-          console.log('\n🤖 Force re-translating all keys...\n');
-        } else {
-          const staleCount = retranslateChanged ? validationResult.stale.length : 0;
-          console.log(`\n🤖 Auto-filling ${totalMissing} missing and ${staleCount} changed translations...\n`);
-        }
-        await autoFillTranslations(projectRoot, {
-          apiKey,
-          limit,
-          concurrency,
-          language,
-          dryRun,
-          delayMs: 50,
-          retranslateChanged,
-          force
-        });
-
-        // Re-validate after auto-fill
-        if (!dryRun) {
-          console.log('\n🔍 Re-validating after auto-fill...\n');
-          const revalidation = validateTranslations(projectRoot);
-          if (revalidation.valid && !revalidation.stale.length) {
-            console.log('\n✅ All translations are now complete!\n');
-          }
-        }
-      }
-    } else if (!validationResult.valid) {
-      console.log(`\n💡 Tip: Run with --auto-fill to automatically translate missing keys.\n`);
-    } else if (validationResult.stale.length > 0) {
-      console.log('\n💡 Tip: Run with --auto-fill --retranslate-changed to update outdated translations.\n');
-    }
+  if (hasWorkToFill && !autoFill && !validationResult.valid) {
+    console.log(`\n💡 Tip: Run with --auto-fill to automatically translate missing keys.\n`);
+  } else if (hasWorkToFill && !autoFill && validationResult.stale.length) {
+    console.log('\n💡 Tip: Run with --auto-fill --retranslate-changed to update outdated translations.\n');
   }
 
   // Step 5: Generate types
@@ -194,16 +216,16 @@ export async function manageTranslations(
   if (!validationResult.valid && !autoFill) {
     console.log(`\n⚠️  ${validationResult.missing.length} missing translations`);
     console.log(`⚠️  ${validationResult.empty.length} empty translations`);
-    if (validationResult.orphaned.length > 0) {
+    if (validationResult.orphaned.length) {
       console.log(`⚠️  ${validationResult.orphaned.length} orphaned translations (will be auto-removed on next sync)`);
     }
-    if (validationResult.stale.length > 0) {
+    if (validationResult.stale.length) {
       console.log(`⚠️  ${validationResult.stale.length} potentially outdated translations`);
     }
     console.log('\nNext steps:');
     console.log('  1. Add missing translations manually, or');
     console.log('  2. Run with --auto-fill to translate automatically');
-  } else if (validationResult.valid && validationResult.stale.length > 0 && !autoFill) {
+  } else if (validationResult.valid && validationResult.stale.length && !autoFill) {
     console.log(`\n⚠️  ${validationResult.stale.length} potentially outdated translations`);
     console.log('\nNext steps:');
     console.log('  Run with --auto-fill --retranslate-changed to update them');
@@ -214,7 +236,7 @@ export async function manageTranslations(
   console.log('=====\n');
 
   // Return validation status (true if valid after all operations)
-  if (autoFill && !dryRun && apiKey) {
+  if (autoFillRan && !dryRun) {
     // Re-validate to get final status
     const finalValidation = validateTranslations(projectRoot);
     return finalValidation.valid;

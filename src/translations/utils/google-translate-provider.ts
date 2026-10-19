@@ -4,17 +4,42 @@
  */
 
 import { logLanguageFallback, resolveLanguageWithFallback } from './language-fallback.js';
-import type { TranslateOptions, TranslationProvider } from './translator-interface';
+import { AUTH_FAILURE_STATUSES, ProviderAuthError } from './provider-errors.js';
+import type { TranslateOptions, TranslationProvider } from './translator-interface.js';
 
-interface GoogleTranslateResponse {
-  data: {
-    translations: Array<{
-      translatedText: string;
-    }>;
-  };
-  error?: {
-    message: string;
-  };
+const GOOGLE_TRANSLATE_API_URL = 'https://translation.googleapis.com/language/translate/v2';
+const DEFAULT_BATCH_DELAY_MS = 100;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/**
+ * The first translated text of a Google Translate response. Throws the API's
+ * own error message when the response carries one.
+ */
+function parseGoogleTranslation(value: unknown): string {
+  if (isRecord(value) && isRecord(value.error)) {
+    throw new Error(`Google Translate API error: ${value.error.message}`);
+  }
+  const translations = isRecord(value) && isRecord(value.data) ? value.data.translations : undefined;
+  const [first] = Array.isArray(translations) ? translations : [];
+  if (!isRecord(first) || typeof first.translatedText !== 'string') {
+    throw new Error('Google Translate API response: `data.translations[0].translatedText` must be a string');
+  }
+  return first.translatedText;
+}
+
+/** Google Translate takes the base code of a regional variant ('pt_br' -> 'pt') */
+function toGoogleLanguageCode(languageCode: string): string {
+  return languageCode.split('_')[0];
+}
+
+/** Resolve a language to one Google supports, logging when a fallback is used */
+function resolveGoogleLanguage(language: string, useFallbackLanguages: boolean): string {
+  const result = resolveLanguageWithFallback(language, 'google', useFallbackLanguages);
+  logLanguageFallback(result, 'google');
+  return result.resolvedLanguage;
 }
 
 /**
@@ -30,18 +55,17 @@ function preserveVariables(
 } {
   const variableMap = new Map<string, string>();
   let placeholderIndex = 0;
-  let result = text;
 
   // Replace protected terms first (before variable patterns)
-  for (const term of protectedTerms) {
+  const result = protectedTerms.reduce((current, term) => {
     const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    result = result.replace(new RegExp(escaped, 'g'), () => {
+    return current.replace(new RegExp(escaped, 'g'), () => {
       const placeholder = `XXX_${placeholderIndex}_XXX`;
       variableMap.set(placeholder, term);
       placeholderIndex++;
       return placeholder;
     });
-  }
+  }, text);
 
   // Match both {{variable}} and {variable} patterns
   // Process {{...}} first to avoid partial matches
@@ -66,11 +90,10 @@ function preserveVariables(
  * Restore original {{variable}} and {variable} interpolations from placeholders
  */
 function restoreVariables(text: string, variableMap: Map<string, string>): string {
-  let result = text;
-  for (const [placeholder, original] of variableMap) {
-    result = result.replace(new RegExp(placeholder, 'g'), original);
-  }
-  return result;
+  return Array.from(variableMap).reduce(
+    (current, [placeholder, original]) => current.replace(new RegExp(placeholder, 'g'), original),
+    text
+  );
 }
 
 /**
@@ -87,31 +110,19 @@ export class GoogleTranslateProvider implements TranslationProvider {
       );
     }
 
-    // Resolve target language with fallback
-    const targetLangResult = resolveLanguageWithFallback(targetLang, 'google', useFallbackLanguages);
-    logLanguageFallback(targetLangResult, 'google');
-
-    // Resolve source language with fallback (if provided)
-    let resolvedSourceLang: string | undefined;
-    if (sourceLang) {
-      const sourceLangResult = resolveLanguageWithFallback(sourceLang, 'google', useFallbackLanguages);
-      logLanguageFallback(sourceLangResult, 'google');
-      resolvedSourceLang = sourceLangResult.resolvedLanguage;
-    }
+    // Resolve target and (if provided) source language with fallback
+    const resolvedTargetLanguage = resolveGoogleLanguage(targetLang, useFallbackLanguages);
+    const resolvedSourceLanguage = sourceLang ? resolveGoogleLanguage(sourceLang, useFallbackLanguages) : undefined;
 
     // Extract and preserve interpolation variables
     const { textWithPlaceholders, variableMap } = preserveVariables(text, protectedTerms);
 
     // Translate the text with placeholders
-    const url = `https://translation.googleapis.com/language/translate/v2?key=${apiKey}`;
+    const url = `${GOOGLE_TRANSLATE_API_URL}?key=${apiKey}`;
 
     // For Google Translate, use base language code (before underscore) for regional variants
-    // e.g., 'pt_br' -> 'pt', but keep the full code if it's in the supported list
-    const sourceForGoogle = resolvedSourceLang?.includes('_') ? resolvedSourceLang.split('_')[0] : resolvedSourceLang;
-
-    const targetForGoogle = targetLangResult.resolvedLanguage.includes('_')
-      ? targetLangResult.resolvedLanguage.split('_')[0]
-      : targetLangResult.resolvedLanguage;
+    const sourceForGoogle = resolvedSourceLanguage && toGoogleLanguageCode(resolvedSourceLanguage);
+    const targetForGoogle = toGoogleLanguageCode(resolvedTargetLanguage);
 
     const response = await fetch(url, {
       method: 'POST',
@@ -126,13 +137,17 @@ export class GoogleTranslateProvider implements TranslationProvider {
       })
     });
 
-    const data = (await response.json()) as GoogleTranslateResponse;
-
-    if (data.error) {
-      throw new Error(`Google Translate API error: ${data.error.message}`);
+    const data = (await response.json().catch(() => undefined)) as unknown;
+    // Google answers an invalid key with 400 "API key not valid", and a disabled API or billing with 403
+    const errorMessage = isRecord(data) && isRecord(data.error) ? String(data.error.message) : '';
+    if (AUTH_FAILURE_STATUSES.has(response.status) || /API key not valid/i.test(errorMessage)) {
+      throw new ProviderAuthError(
+        `Google Translate API error: ${errorMessage || response.statusText} (${response.status})`,
+        response.status
+      );
     }
 
-    const translatedText = data.data.translations[0].translatedText;
+    const translatedText = parseGoogleTranslation(data);
 
     // Restore original interpolation variables
     return restoreVariables(translatedText, variableMap);
@@ -143,7 +158,7 @@ export class GoogleTranslateProvider implements TranslationProvider {
     sourceLang: string,
     targetLang: string,
     apiKey?: string,
-    delayMs: number = 100
+    delayMs: number = DEFAULT_BATCH_DELAY_MS
   ): Promise<string[]> {
     const results: string[] = [];
 

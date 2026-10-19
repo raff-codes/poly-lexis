@@ -158,12 +158,13 @@ jobs:
 ### CLI Options
 
 **Smart Mode:**
-- `-a, --auto-fill` - Auto-fill missing translations with DeepL or Google Translate
-- `--api-key <key>` - Translation API key (or set DEEPL_API_KEY/GOOGLE_TRANSLATE_API_KEY env var)
+- `-a, --auto-fill` - Auto-fill missing translations with the configured provider
+- `--api-key <key>` - API key for the configured provider (or set `DEEPL_API_KEY`, `GOOGLE_TRANSLATE_API_KEY` or `ANTHROPIC_API_KEY`)
 - `-l, --language <lang>` - Process only this language
 - `--limit <number>` - Max translations to process (default: 1000)
 - `--retranslate-changed` - Re-translate keys whose source value changed since last run (implies `--auto-fill`)
 - `--force` - Re-translate every key, even ones already translated (implies `--auto-fill`)
+- `--include-manual-edits` - Also replace translations someone edited by hand (skipped by default)
 - `--skip-types` - Skip TypeScript type generation
 - `-d, --dry-run` - Preview changes without saving
 
@@ -171,7 +172,40 @@ jobs:
 - `-n, --namespace <name>` - Namespace for the translation
 - `-k, --key <key>` - Translation key
 - `-v, --value <value>` - Translation value in source language
+- `--note <text>` - Note for translators about this key (saved in the namespace's `$context`)
+- `--description <text>` - Description of the namespace (saved in its `$context`)
 - `-a, --auto-fill` - Auto-translate to all languages
+
+**Review Mode** (`poly-lexis review`, Claude providers only):
+- `-l, --language <lang>` - Review only this language
+- `-n, --namespace <name>` - Review only this namespace
+- `--output <file>` - Report file (default: `translations-review.json`)
+- `--apply` - Apply the corrections left in the report file
+- `--include-manual-edits` - Also review translations someone edited by hand
+
+### Reviewing Existing Translations
+
+Translations made without context are often wrong for short strings: a status "Open" becomes the verb,
+"Book" becomes a book. `review` sends your existing translations to Claude with their context and writes
+the suggested corrections to a report. Nothing changes until you apply it:
+
+```bash
+poly-lexis review --language fr      # writes translations-review.json
+# read the report, delete entries you disagree with
+poly-lexis review --apply            # writes the corrections you kept
+```
+
+An entry is skipped on apply when its translation changed after the review ran, so a later edit is never
+overwritten, or when its source string changed, so a correction for old text isn't written. A report broken
+by a hand edit is rejected with the index of the bad entry.
+
+The report is written to the project root. Add `translations-review.json` to `.gitignore` unless you want to
+keep reviews in version control.
+
+### Hand Edits Are Kept
+
+poly-lexis records a hash of every translation it writes. When someone later edits that translation by hand,
+`--force`, `--retranslate-changed` and `review` leave it alone. Pass `--include-manual-edits` to include them.
 
 ## Configuration
 
@@ -194,8 +228,23 @@ poly-lexis uses a `.translationsrc.json` file in your project root for configura
 - `languages` - Array of language codes to support (default: `["en"]`)
 - `sourceLanguage` - Source language for translations (default: `"en"`)
 - `typesOutputPath` - Path to output TypeScript types (default: `src/types/i18nTypes.ts`)
-- `provider` - Translation provider to use: `"deepl"` or `"google"` (default: `"deepl"`)
+- `provider` - Translation provider: `"deepl"`, `"google"`, `"claude"`, `"claude-api"` or `"claude-code"` (default: `"deepl"`)
+- `fallbackProvider` - `"deepl"` or `"google"`, used when the main provider is unavailable or returns an unusable translation (default: none)
 - `protectedTerms` - Words or phrases that should never be translated (default: `[]`)
+- `context` - What the app is and who uses it, sent with every key
+- `contextRequired` - Fail validation when a namespace has no `$context.description` (default: `false`, warn only)
+- `glossary` - Path to a shared glossary file, relative to the project root
+- `languageSettings` - Per-language `formality` (`"formal"`, `"informal"`) and `instructions` (Claude only)
+- `keyRoles` - Extra `{ pattern, role }` rules for inferring what a key is from its name
+- `claude` - Settings for the Claude providers:
+  - `model` - claude-api defaults to `claude-opus-5-5`; claude-code uses your Claude Code model
+  - `maxKeysPerRequest` - keys per request (default `40`)
+  - `codeContext` - send code snippets showing where each key is used (default `true`); see [What is sent to Claude](#what-is-sent-to-claude)
+  - `serverFallbacks` - claude-api only: let the API retry a declined request on another model. On by default for
+    the models known to support it; set `true` for a newer model, `false` to never fall back
+
+`keyRoles` patterns are checked before anything is translated; an invalid one stops the run and names the rule.
+A `fallbackProvider` whose API key isn't set is skipped with a warning.
 
 ### Protected Terms
 
@@ -209,10 +258,74 @@ Use `protectedTerms` to prevent specific words or phrases from being translated 
 
 These terms are replaced with placeholders before the text is sent to the translation API and restored afterwards, so the translation service never sees them.
 
+Protected terms are merged into the glossary as do-not-translate terms. New projects can list them in the
+glossary instead.
+
+### Translation Context
+
+Short UI strings are ambiguous on their own. poly-lexis sends each key with context so it is translated for
+the screen it appears on. Most of it is worked out for you:
+
+| Context | Where it comes from |
+|---|---|
+| App description | `context` in `.translationsrc.json` |
+| Namespace description | `$context.description` in the source-language file |
+| Note for one key | `$context.keys.<KEY>` in the source-language file |
+| UI role | Inferred from the key name: `COL_*` is a column header, `STATUS_*` a status label, `*_PLACEHOLDER` placeholder text… (extend with `keyRoles`) |
+| Surrounding strings | The keys next to it in the file |
+| Code usage | The lines of code that use the key, including `t('ns:KEY')` and `t('ns.KEY')` (Claude providers only; turn off with `claude.codeContext`) |
+| Glossary | Terms from the `glossary` file that appear in the string |
+
+Context written by people lives in a reserved `$context` entry at the top of the **source-language** file:
+
+```json
+{
+  "$context": {
+    "description": "Booking a spa treatment for a customer: choosing treatment, time and therapist, then checking out",
+    "keys": {
+      "BOOK_CHECKOUT_SUBMIT": "Button that confirms the booking"
+    }
+  },
+  "BOOK_CHECKOUT_SUBMIT": "Book"
+}
+```
+
+i18next only looks up the keys it is asked for, so `$context` needs no change in your app. poly-lexis never
+translates it, never copies it into other languages and leaves it out of the generated types. Validation warns
+about notes for keys that no longer exist and malformed `$context` entries. Once the project uses context (`context`
+or `contextRequired` is set), it also warns about namespaces without a description. Interactive `add` asks for a
+description when the namespace doesn't have one yet.
+
+Write descriptions as plain statements of what the screen is ("Admin table to review stocktakes"), not as
+instructions ("Translate formally"). DeepL uses context as surrounding text and does not follow instructions.
+
+### Glossary
+
+A glossary keeps terms consistent across apps. Point every app at the same file:
+
+```json
+{
+  "terms": [
+    { "term": "Lush", "doNotTranslate": true },
+    { "term": "store", "note": "A Lush shop, not an app store", "translations": { "fr": "boutique", "ja": "店舗" } }
+  ]
+}
+```
+
+Only the terms that appear in a batch are sent with it. A translation that changes a `doNotTranslate` term is
+rejected; one that doesn't use a term's required translation is written with a warning.
+
+### Checks on Every Translation
+
+Before anything is written, each translation is checked: it must not be empty, must keep every `{{placeholder}}`
+and `{placeholder}`, and must keep do-not-translate terms. Keys that fail are retried once, then sent to
+`fallbackProvider`; any still failing are reported and left untouched.
+
 ### Environment Variables
 
 - `DEEPL_API_KEY` - DeepL API key for auto-translation (when provider is "deepl")
 - `GOOGLE_TRANSLATE_API_KEY` - Google Translate API key for auto-translation (when provider is "google")
+- `ANTHROPIC_API_KEY` - Claude API key (when provider is "claude-api", or "claude" without Claude Code)
 
 ### Translation Providers
 
@@ -226,6 +339,28 @@ These terms are replaced with placeholders before the text is sent to the transl
 - Supports 100+ languages
 - Requires Google Cloud Translation API key
 - Set `"provider": "google"` in config and `GOOGLE_TRANSLATE_API_KEY` environment variable
+
+**Claude**
+- Uses all of the context above, including the code that uses each key, and supports `review`
+- Translates a namespace in batches of up to `claude.maxKeysPerRequest` keys
+- `"provider": "claude"` picks a route at run time:
+  1. `claude-code`: your locally installed Claude Code, when you are signed in (`claude auth status`). No API key needed.
+     Runs `claude -p` with no tools, no project settings and no saved session.
+  2. `claude-api`: the Claude API, when `ANTHROPIC_API_KEY` is set. Use this in CI.
+  3. `fallbackProvider`, when neither is available.
+- Set `"provider": "claude-code"` or `"claude-api"` to require one route
+- Claude Code sign-in is for your own local use; use `claude-api` with an API key in CI and shared pipelines
+
+#### What is sent to Claude
+
+Each request carries the source strings and their context: the app and namespace descriptions, key notes,
+neighbouring strings, glossary terms and, by default, **up to three snippets of your source code per key**
+(a few lines around each place the key is used). Both routes send this to Anthropic. If source code must not
+leave your machine, set `"claude": { "codeContext": false }`; everything else is still sent.
+
+DeepL and Google never receive code. A rejected API key or exhausted quota (DeepL 401/403/456, Google 401/403
+or "API key not valid") stops that provider for the rest of the run instead of failing every key. The remaining
+keys go to `fallbackProvider` if it is set.
 
 **Custom Providers**
 You can implement custom translation providers by implementing the `TranslationProvider` interface:
@@ -246,6 +381,10 @@ class MyCustomProvider implements TranslationProvider {
 // Set your custom provider before running auto-fill
 setTranslationProvider(new MyCustomProvider());
 ```
+
+A provider that translates one string per call receives the context as prose in `options.context`. To use the
+full context, implement `ContextualTranslationProvider` instead: `translateItems(request)` receives a batch of
+keys from one namespace, each with its role, note, neighbours and code usages.
 
 ### Directory Structure
 

@@ -2,6 +2,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type { TranslationFile, TranslationFiles } from '../core/types.js';
 import { metadataExists, pruneMetadata, readMetadata, writeMetadata } from './metadata.js';
+import { CONTEXT_KEY } from './source-context.js';
 
 /**
  * Nested translation structure (allows nested objects)
@@ -14,10 +15,10 @@ export type NestedTranslationFile = {
  * Flatten a nested object into a flat key-value structure using dot notation
  * Example: { home: { title: "Hello" } } -> { "home.title": "Hello" }
  */
-export function flattenObject(obj: NestedTranslationFile, prefix = ''): TranslationFile {
+export function flattenObject(nested: NestedTranslationFile, prefix = ''): TranslationFile {
   const result: TranslationFile = {};
 
-  for (const [key, value] of Object.entries(obj)) {
+  for (const [key, value] of Object.entries(nested)) {
     const newKey = prefix ? `${prefix}.${key}` : key;
 
     if (typeof value === 'string') {
@@ -34,10 +35,10 @@ export function flattenObject(obj: NestedTranslationFile, prefix = ''): Translat
  * Unflatten a flat object with dot notation keys into a nested structure
  * Example: { "home.title": "Hello" } -> { home: { title: "Hello" } }
  */
-export function unflattenObject(obj: TranslationFile): NestedTranslationFile {
+export function unflattenObject(flat: TranslationFile): NestedTranslationFile {
   const result: NestedTranslationFile = {};
 
-  for (const [key, value] of Object.entries(obj)) {
+  for (const [key, value] of Object.entries(flat)) {
     const parts = key.split('.');
     let current: NestedTranslationFile = result;
 
@@ -58,29 +59,54 @@ export function unflattenObject(obj: TranslationFile): NestedTranslationFile {
 /**
  * Check if an object is flat (all values are strings) or nested
  */
-export function isNestedObject(obj: Record<string, unknown>): boolean {
-  return Object.values(obj).some((value) => typeof value === 'object' && value !== null);
+export function isNestedObject(record: Record<string, unknown>): boolean {
+  return Object.values(record).some((value) => typeof value === 'object' && value !== null);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/**
+ * Parse the contents of a translation file. The top level must be an object;
+ * leaf values are left as they are and handled by the readers.
+ */
+function parseTranslationFile(value: unknown, filePath: string): NestedTranslationFile {
+  if (!isRecord(value)) {
+    throw new Error(`${filePath} must be a JSON object mapping keys to strings or nested objects`);
+  }
+  return value as NestedTranslationFile;
+}
+
+/** The `$context` entry of an existing namespace file, or undefined when the file has none */
+function readExistingContext(filePath: string): unknown {
+  if (!fs.existsSync(filePath)) {
+    return undefined;
+  }
+  const parsed: unknown = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+  return isRecord(parsed) ? parsed[CONTEXT_KEY] : undefined;
 }
 
 /**
  * Read all translation files for a specific language
- * Automatically flattens nested structures into dot notation
+ * Automatically flattens nested structures into dot notation.
+ * The reserved `$context` entry is left out; read it with `readNamespaceContexts`.
  */
 export function readTranslations(translationsPath: string, language: string): TranslationFiles {
-  const langPath = path.join(translationsPath, language);
+  const languagePath = path.join(translationsPath, language);
 
-  if (!fs.existsSync(langPath)) {
+  if (!fs.existsSync(languagePath)) {
     return {};
   }
 
-  const files = fs.readdirSync(langPath).filter((f) => f.endsWith('.json'));
+  const files = fs.readdirSync(languagePath).filter((fileName) => fileName.endsWith('.json'));
   const translations: TranslationFiles = {};
 
   for (const file of files) {
     const namespace = path.basename(file, '.json');
-    const filePath = path.join(langPath, file);
+    const filePath = path.join(languagePath, file);
     const content = fs.readFileSync(filePath, 'utf-8');
-    const parsed = JSON.parse(content) as NestedTranslationFile;
+    const { [CONTEXT_KEY]: _context, ...parsed } = parseTranslationFile(JSON.parse(content), filePath);
 
     // Flatten nested structures automatically
     if (isNestedObject(parsed)) {
@@ -94,7 +120,8 @@ export function readTranslations(translationsPath: string, language: string): Tr
 }
 
 /**
- * Write translation file for a specific language and namespace
+ * Write translation file for a specific language and namespace.
+ * A `$context` entry already in the file is kept as its first entry.
  */
 export function writeTranslation(
   translationsPath: string,
@@ -102,14 +129,17 @@ export function writeTranslation(
   namespace: string,
   translations: TranslationFile
 ): void {
-  const langPath = path.join(translationsPath, language);
+  const languagePath = path.join(translationsPath, language);
 
-  if (!fs.existsSync(langPath)) {
-    fs.mkdirSync(langPath, { recursive: true });
+  if (!fs.existsSync(languagePath)) {
+    fs.mkdirSync(languagePath, { recursive: true });
   }
 
-  const filePath = path.join(langPath, `${namespace}.json`);
-  fs.writeFileSync(filePath, `${JSON.stringify(translations, null, 2)}\n`, 'utf-8');
+  const filePath = path.join(languagePath, `${namespace}.json`);
+  const existingContext = readExistingContext(filePath);
+  const content = existingContext === undefined ? translations : { [CONTEXT_KEY]: existingContext, ...translations };
+
+  fs.writeFileSync(filePath, `${JSON.stringify(content, null, 2)}\n`, 'utf-8');
 }
 
 /**
@@ -130,16 +160,16 @@ export function getAvailableLanguages(translationsPath: string): string[] {
  * Get all namespaces for a specific language
  */
 export function getNamespaces(translationsPath: string, language: string): string[] {
-  const langPath = path.join(translationsPath, language);
+  const languagePath = path.join(translationsPath, language);
 
-  if (!fs.existsSync(langPath)) {
+  if (!fs.existsSync(languagePath)) {
     return [];
   }
 
   return fs
-    .readdirSync(langPath)
-    .filter((f) => f.endsWith('.json'))
-    .map((f) => path.basename(f, '.json'));
+    .readdirSync(languagePath)
+    .filter((fileName) => fileName.endsWith('.json'))
+    .map((fileName) => path.basename(fileName, '.json'));
 }
 
 /**
@@ -169,17 +199,17 @@ export function validateVariables(sourceText: string, translatedText: string): b
     return false;
   }
 
-  return sourceVars.every((v, i) => v === translatedVars[i]);
+  return sourceVars.every((variable, index) => variable === translatedVars[index]);
 }
 
 /**
  * Sort object keys alphabetically
  */
-export function sortKeys<T extends Record<string, unknown>>(obj: T): T {
+export function sortKeys<T extends Record<string, unknown>>(record: T): T {
   const sorted = {} as T;
-  const keys = Object.keys(obj).sort();
+  const keys = Object.keys(record).sort();
   for (const key of keys) {
-    sorted[key as keyof T] = obj[key as keyof T];
+    sorted[key as keyof T] = record[key as keyof T];
   }
   return sorted;
 }
@@ -192,10 +222,10 @@ export function ensureTranslationsStructure(translationsPath: string, languages:
     fs.mkdirSync(translationsPath, { recursive: true });
   }
 
-  for (const lang of languages) {
-    const langPath = path.join(translationsPath, lang);
-    if (!fs.existsSync(langPath)) {
-      fs.mkdirSync(langPath, { recursive: true });
+  for (const language of languages) {
+    const languagePath = path.join(translationsPath, language);
+    if (!fs.existsSync(languagePath)) {
+      fs.mkdirSync(languagePath, { recursive: true });
     }
   }
 }
@@ -214,11 +244,17 @@ export function createEmptyTranslationStructure(sourceFile: TranslationFile): Tr
   return result;
 }
 
+/** What {@link syncTranslationStructure} changed */
 export interface SyncResult {
+  /** Language folders that were created */
   createdFolders: string[];
+  /** Namespace files created in target languages with empty values */
   createdFiles: Array<{ language: string; namespace: string; path: string }>;
+  /** Namespace files that already existed, and whether orphaned keys were cleaned from them */
   skippedFiles: Array<{ language: string; namespace: string; reason: string }>;
+  /** Keys removed from target languages because they are not in the source */
   cleanedKeys: Array<{ language: string; namespace: string; key: string }>;
+  /** Namespace files removed from target languages because they are not in the source */
   removedNamespaces: Array<{ language: string; namespace: string; path: string }>;
 }
 
@@ -257,7 +293,7 @@ export function syncTranslationStructure(
   const sourceTranslations = readTranslations(translationsPath, sourceLanguage);
 
   // 4. Sync each target language
-  const targetLanguages = languages.filter((lang) => lang !== sourceLanguage);
+  const targetLanguages = languages.filter((language) => language !== sourceLanguage);
 
   for (const language of targetLanguages) {
     const targetTranslations = readTranslations(translationsPath, language);
@@ -285,22 +321,22 @@ export function syncTranslationStructure(
       if (fs.existsSync(filePath)) {
         // File exists - check for orphaned keys and remove them
         const targetFile = targetTranslations[namespace] || {};
-        let hasOrphanedKeys = false;
+        const orphanedKeys = Object.keys(targetFile).filter((key) => sourceFile[key] === undefined);
+        const hasOrphanedKeys = !!orphanedKeys.length;
         const cleanedFile: TranslationFile = {};
 
         // Only keep keys that exist in source
         for (const key of Object.keys(targetFile)) {
           if (sourceFile[key] !== undefined) {
             cleanedFile[key] = targetFile[key];
-          } else {
-            // Orphaned key found
-            hasOrphanedKeys = true;
-            result.cleanedKeys.push({
-              language,
-              namespace,
-              key
-            });
           }
+        }
+        for (const key of orphanedKeys) {
+          result.cleanedKeys.push({
+            language,
+            namespace,
+            key
+          });
         }
 
         // Add missing keys with empty values

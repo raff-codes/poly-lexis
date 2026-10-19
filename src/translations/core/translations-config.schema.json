@@ -278,9 +278,95 @@
     },
     "provider": {
       "type": "string",
-      "description": "Translation provider to use (deepl or google)",
-      "enum": ["deepl", "google"],
+      "description": "Translation provider to use. \"claude\" uses the local Claude Code CLI when you are signed in, otherwise the Claude API when ANTHROPIC_API_KEY is set, otherwise fallbackProvider.",
+      "enum": ["deepl", "google", "claude", "claude-api", "claude-code"],
       "default": "deepl"
+    },
+    "fallbackProvider": {
+      "type": ["string", "null"],
+      "description": "Provider to use when the main provider is unavailable or returns an unusable translation",
+      "enum": ["deepl", "google", null],
+      "default": null
+    },
+    "context": {
+      "type": "string",
+      "description": "What the app is and who uses it, e.g. \"Lush Spa is the internal tool spa staff use to manage treatments and bookings.\" Sent to the provider for every key."
+    },
+    "contextRequired": {
+      "type": "boolean",
+      "description": "Fail validation when a source namespace has no $context.description",
+      "default": false
+    },
+    "glossary": {
+      "type": "string",
+      "description": "Path to a shared glossary JSON file, relative to the project root",
+      "examples": ["../../translations.glossary.json"]
+    },
+    "languageSettings": {
+      "type": "object",
+      "description": "Settings per target language",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "formality": {
+            "type": "string",
+            "enum": ["formal", "informal", "default"],
+            "description": "Register to translate in"
+          },
+          "instructions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Style instructions for this language. Used by the Claude providers only."
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "keyRoles": {
+      "type": "array",
+      "description": "Extra key-name rules for inferring the UI role of a key. Checked before the built-in rules.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "pattern": {
+            "type": "string",
+            "description": "Regular expression tested against the key"
+          },
+          "role": {
+            "type": "string",
+            "description": "Role passed to the provider, e.g. \"table column header\""
+          }
+        },
+        "required": ["pattern", "role"],
+        "additionalProperties": false
+      }
+    },
+    "claude": {
+      "type": "object",
+      "description": "Settings for the claude, claude-api and claude-code providers",
+      "properties": {
+        "model": {
+          "type": "string",
+          "description": "Model to use. claude-api defaults to claude-opus-5-5; claude-code defaults to the user's Claude Code model"
+        },
+        "maxKeysPerRequest": {
+          "type": "integer",
+          "description": "Maximum keys sent in one request",
+          "default": 40
+        },
+        "codeContext": {
+          "type": "boolean",
+          "description": "Send code snippets showing where each key is used along with the request. Turn off when source code must not be sent to Anthropic.",
+          "default": true
+        },
+        "serverFallbacks": {
+          "type": "boolean",
+          "description": "claude-api only: let the API retry a declined request on a fallback model. Defaults to on for the models known to support it."
+        }
+      },
+      "additionalProperties": false
     },
     "useFallbackLanguages": {
       "type": "boolean",

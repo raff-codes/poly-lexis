@@ -1,9 +1,15 @@
 import * as path from 'node:path';
-import type { TranslationEntry } from '../core/types.js';
-import { DeepLTranslateProvider } from '../utils/deepl-translate-provider.js';
-import { GoogleTranslateProvider } from '../utils/google-translate-provider.js';
-import { readMetadata, setSourceHash, writeMetadata } from '../utils/metadata.js';
-import { getTranslationProvider, setTranslationProvider, translateText } from '../utils/translator.js';
+import type { TranslationConfig, TranslationEntry } from '../core/types.js';
+import {
+  getSourceHash,
+  hashSourceValue,
+  isManuallyEdited,
+  readMetadata,
+  type TranslationMetadata
+} from '../utils/metadata.js';
+import { createProvider, type ProviderSetup } from '../utils/provider-factory.js';
+import { updateNamespaceContext } from '../utils/source-context.js';
+import { printFailures, runTranslations } from '../utils/translation-runner.js';
 import { readTranslations, sortKeys, writeTranslation } from '../utils/utils.js';
 import { generateTranslationTypes } from './generate-types.js';
 import { loadConfig } from './init.js';
@@ -15,11 +21,90 @@ interface AddKeyOptions {
   key: string;
   /** Translation value (English) */
   value: string;
+  /** Note for translators about this key, stored in the namespace's $context */
+  note?: string;
+  /** Description of the namespace, stored in its $context (for a new namespace, or to replace the old one) */
+  description?: string;
   /** Auto-translate to all languages */
   autoTranslate?: boolean;
-  /** Translation API key (DeepL or Google Translate) */
+  /** Translation API key for the configured provider */
   apiKey?: string;
 }
+
+/**
+ * Build the configured provider for `--auto-translate`, or report why it can't
+ * run and return undefined so the key is added with empty values instead.
+ */
+const createOptionalProvider = (
+  config: Required<TranslationConfig>,
+  apiKey: string | undefined
+): ProviderSetup | undefined => {
+  try {
+    return createProvider(config, { apiKey });
+  } catch (error) {
+    console.error(`\n⚠ ${error instanceof Error ? error.message : 'Translation provider unavailable'}`);
+    console.log('Adding empty values instead.');
+    return undefined;
+  }
+};
+
+/** Add `key` with an empty value to each language that doesn't have it yet */
+const addEmptyValues = (
+  translationsPath: string,
+  languages: string[],
+  namespace: string,
+  key: string,
+  logEach: boolean
+): void => {
+  for (const language of languages) {
+    const entries = readTranslations(translationsPath, language)[namespace] ?? {};
+
+    if (entries[key] !== undefined) {
+      if (logEach) {
+        console.log(`  - ${language}/${namespace}.json: Already exists`);
+      }
+      continue;
+    }
+
+    writeTranslation(translationsPath, language, namespace, sortKeys({ ...entries, [key]: '' }));
+    if (logEach) {
+      console.log(`  ✓ ${language}/${namespace}.json`);
+    }
+  }
+};
+
+/**
+ * Whether a language needs `key` (re)translated: it is empty, or poly-lexis
+ * translated it from a different source value. Hand-edited translations are kept.
+ */
+const needsTranslation = (
+  translationsPath: string,
+  metadata: TranslationMetadata,
+  language: string,
+  namespace: string,
+  key: string,
+  sourceValue: string
+): boolean => {
+  const existing = readTranslations(translationsPath, language)[namespace]?.[key];
+
+  if (!existing?.trim()) {
+    return true;
+  }
+
+  if (isManuallyEdited(metadata, language, namespace, key, existing)) {
+    console.log(`  - ${language}: Edited by hand, keeping it`);
+    return false;
+  }
+
+  const sourceHash = getSourceHash(metadata, language, namespace, key);
+  if (sourceHash !== undefined && sourceHash !== hashSourceValue(sourceValue)) {
+    console.log(`  - ${language}: Source changed, re-translating`);
+    return true;
+  }
+
+  console.log(`  - ${language}: Already exists, skipping`);
+  return false;
+};
 
 /**
  * Add a new translation key to all languages
@@ -27,21 +112,7 @@ interface AddKeyOptions {
 export async function addTranslationKey(projectRoot: string, options: AddKeyOptions): Promise<void> {
   const config = loadConfig(projectRoot);
   const translationsPath = path.join(projectRoot, config.translationsPath);
-  const { namespace, key, value, autoTranslate = false, apiKey } = options;
-
-  // Set up the translation provider based on config (only if not already set by user)
-  const currentProvider = getTranslationProvider();
-  const isDefaultGoogleProvider = currentProvider.constructor.name === 'GoogleTranslateProvider';
-
-  // Only set provider if user hasn't already set a custom one
-  if (isDefaultGoogleProvider) {
-    const provider = config.provider || 'deepl';
-    if (provider === 'deepl') {
-      setTranslationProvider(new DeepLTranslateProvider());
-    } else {
-      setTranslationProvider(new GoogleTranslateProvider());
-    }
-  }
+  const { namespace, key, value, note, description, autoTranslate = false, apiKey } = options;
 
   console.log('=====');
   console.log('Adding translation key');
@@ -49,11 +120,14 @@ export async function addTranslationKey(projectRoot: string, options: AddKeyOpti
   console.log(`Namespace: ${namespace}`);
   console.log(`Key: ${key}`);
   console.log(`Value (${config.sourceLanguage}): ${value}`);
+  if (note) {
+    console.log(`Note: ${note}`);
+  }
   console.log('=====');
 
   // Add to source language
-  const sourceLang = config.sourceLanguage;
-  const sourceTranslations = readTranslations(translationsPath, sourceLang);
+  const sourceLanguage = config.sourceLanguage;
+  const sourceTranslations = readTranslations(translationsPath, sourceLanguage);
 
   if (!sourceTranslations[namespace]) {
     sourceTranslations[namespace] = {};
@@ -65,77 +139,41 @@ export async function addTranslationKey(projectRoot: string, options: AddKeyOpti
 
   sourceTranslations[namespace][key] = value;
   const sortedSource = sortKeys(sourceTranslations[namespace]);
-  writeTranslation(translationsPath, sourceLang, namespace, sortedSource);
-  console.log(`✓ Added to ${sourceLang}/${namespace}.json`);
+  writeTranslation(translationsPath, sourceLanguage, namespace, sortedSource);
+  console.log(`✓ Added to ${sourceLanguage}/${namespace}.json`);
+
+  if (note?.trim() || description?.trim()) {
+    updateNamespaceContext(translationsPath, sourceLanguage, namespace, {
+      description,
+      ...(note?.trim() && { keyNotes: { [key]: note } })
+    });
+    console.log(`✓ Saved context in ${sourceLanguage}/${namespace}.json`);
+  }
 
   // Handle other languages
-  const otherLanguages = config.languages.filter((lang) => lang !== sourceLang);
+  const otherLanguages = config.languages.filter((language) => language !== sourceLanguage);
+  const setup = autoTranslate ? createOptionalProvider(config, apiKey) : undefined;
 
-  if (autoTranslate && apiKey) {
-    console.log('\nAuto-translating to other languages...');
+  // Every language gets the key first, so it exists even where translating fails
+  console.log(setup ? '\nAuto-translating to other languages...' : '\nAdding empty values to other languages...');
+  addEmptyValues(translationsPath, otherLanguages, namespace, key, !setup);
 
+  if (setup) {
     const metadata = readMetadata(translationsPath);
+    const languagesToTranslate = otherLanguages.filter((language) =>
+      needsTranslation(translationsPath, metadata, language, namespace, key, value)
+    );
 
-    for (const lang of otherLanguages) {
-      try {
-        const targetTranslations = readTranslations(translationsPath, lang);
-
-        if (!targetTranslations[namespace]) {
-          targetTranslations[namespace] = {};
-        }
-
-        // Only translate if key doesn't exist or is empty
-        if (!targetTranslations[namespace][key] || targetTranslations[namespace][key].trim() === '') {
-          const translated = await translateText(
-            value,
-            lang,
-            sourceLang,
-            apiKey,
-            config.useFallbackLanguages,
-            config.protectedTerms
-          );
-          targetTranslations[namespace][key] = translated;
-          const sorted = sortKeys(targetTranslations[namespace]);
-          writeTranslation(translationsPath, lang, namespace, sorted);
-          setSourceHash(metadata, lang, namespace, key, value);
-          console.log(`  ✓ ${lang}: "${translated}"`);
-
-          // Small delay to avoid rate limiting
-          await new Promise((resolve) => setTimeout(resolve, 100));
-        } else {
-          console.log(`  - ${lang}: Already exists, skipping`);
-        }
-      } catch (error) {
-        console.error(`  ✗ ${lang}: Translation failed - ${error instanceof Error ? error.message : 'Unknown error'}`);
-      }
-    }
-
-    writeMetadata(translationsPath, metadata);
-  } else {
-    // Add empty string to other languages
-    console.log('\nAdding empty values to other languages...');
-
-    for (const lang of otherLanguages) {
-      const targetTranslations = readTranslations(translationsPath, lang);
-
-      if (!targetTranslations[namespace]) {
-        targetTranslations[namespace] = {};
-      }
-
-      // Only add if key doesn't exist
-      if (!targetTranslations[namespace][key]) {
-        targetTranslations[namespace][key] = '';
-        const sorted = sortKeys(targetTranslations[namespace]);
-        writeTranslation(translationsPath, lang, namespace, sorted);
-        console.log(`  ✓ ${lang}/${namespace}.json`);
-      } else {
-        console.log(`  - ${lang}/${namespace}.json: Already exists`);
-      }
-    }
-
-    if (!autoTranslate) {
-      console.log('\nℹ Use --auto-translate flag to automatically translate to all languages');
-    }
+    const result = await runTranslations({
+      projectRoot,
+      config,
+      setup,
+      jobs: languagesToTranslate.map((language) => ({ language, namespace, keys: [key] })),
+      metadata
+    });
+    printFailures(result.failed);
+  } else if (!autoTranslate) {
+    console.log('\nℹ Use --auto-translate flag to automatically translate to all languages');
   }
 
   console.log('=====');

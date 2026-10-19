@@ -1,21 +1,25 @@
 import * as path from 'node:path';
 import type { MissingTranslation } from '../core/types.js';
-import { DeepLTranslateProvider } from '../utils/deepl-translate-provider.js';
-import { GoogleTranslateProvider } from '../utils/google-translate-provider.js';
-import { readMetadata, setSourceHash, writeMetadata } from '../utils/metadata.js';
-import { getTranslationProvider, setTranslationProvider, translateText } from '../utils/translator.js';
-import { readTranslations, sortKeys, syncTranslationStructure, writeTranslation } from '../utils/utils.js';
+import { isManuallyEdited, readMetadata } from '../utils/metadata.js';
+import { createProvider } from '../utils/provider-factory.js';
+import { groupIntoJobs, printFailures, runTranslations } from '../utils/translation-runner.js';
+import { readTranslations, syncTranslationStructure } from '../utils/utils.js';
 import { loadConfig } from './init.js';
 import { type FillableType, getMissingForLanguage } from './validate.js';
+
+/** Pause between requests for providers that translate one string per request */
+const DEFAULT_DELAY_MS = 50;
+/** Translation requests run in parallel */
+const DEFAULT_CONCURRENCY = 5;
 
 interface AutoFillOptions {
   /** Language to fill translations for */
   language?: string;
-  /** Translation API key (for DeepL or Google Translate) */
+  /** Translation API key for the configured provider (DeepL, Google Translate or the Claude API) */
   apiKey?: string;
   /** Maximum number of translations to process */
   limit?: number;
-  /** Delay between translations in milliseconds */
+  /** Delay between translations in milliseconds, for providers that translate one string per request */
   delayMs?: number;
   /** Dry run - don't actually write translations */
   dryRun?: boolean;
@@ -25,47 +29,22 @@ interface AutoFillOptions {
   retranslateChanged?: boolean;
   /** Re-translate every key, even ones that already have an up-to-date value */
   force?: boolean;
-}
-
-/**
- * Process items in parallel with a concurrency limit
- */
-async function processConcurrently<T, R>(
-  items: T[],
-  concurrency: number,
-  processor: (item: T, index: number) => Promise<R>
-): Promise<R[]> {
-  const results: R[] = [];
-  const executing: Promise<void>[] = [];
-
-  for (let i = 0; i < items.length; i++) {
-    const item = items[i];
-    const promise = processor(item, i).then((result) => {
-      results[i] = result;
-    });
-
-    executing.push(promise);
-
-    if (executing.length >= concurrency) {
-      await Promise.race(executing);
-      // Remove completed promises
-      const index = executing.indexOf(promise);
-      if (index !== -1) {
-        executing.splice(index, 1);
-      }
-    }
-  }
-
-  // Wait for all remaining promises to complete
-  await Promise.all(executing);
-
-  return results;
+  /** Also re-translate keys someone has edited by hand since poly-lexis wrote them */
+  includeManualEdits?: boolean;
 }
 
 interface FillItemOptions {
   retranslateChanged?: boolean;
   force?: boolean;
 }
+
+/** How the run picks keys, for the summary header */
+const describeMode = (force: boolean, retranslateChanged: boolean): string => {
+  if (force) {
+    return 'all keys (--force)';
+  }
+  return retranslateChanged ? 'missing, empty & changed' : 'missing & empty';
+};
 
 /**
  * Determine which keys to (re-)translate for a language.
@@ -108,51 +87,37 @@ export async function autoFillTranslations(
   const {
     apiKey,
     limit = Infinity,
-    delayMs = 50,
+    delayMs = DEFAULT_DELAY_MS,
     dryRun = false,
-    concurrency = 5,
+    concurrency = DEFAULT_CONCURRENCY,
     retranslateChanged = false,
-    force = false
+    force = false,
+    includeManualEdits = false
   } = options;
 
-  // Set up the translation provider based on config (only if not already set by user)
-  const currentProvider = getTranslationProvider();
-  const isDefaultGoogleProvider = currentProvider.constructor.name === 'GoogleTranslateProvider';
-
-  // Only set provider if user hasn't already set a custom one
-  if (isDefaultGoogleProvider) {
-    const provider = config.provider || 'deepl';
-    if (provider === 'deepl') {
-      setTranslationProvider(new DeepLTranslateProvider());
-    } else {
-      setTranslationProvider(new GoogleTranslateProvider());
-    }
-  }
-
-  if (!apiKey) {
-    const provider = config.provider || 'deepl';
-    const envVarName = provider === 'google' ? 'GOOGLE_TRANSLATE_API_KEY' : 'DEEPL_API_KEY';
-    throw new Error(`Translation API key is required. Set ${envVarName} or pass --api-key`);
-  }
+  // Throws with what to set when the configured provider can't run
+  const setup = createProvider(config, { apiKey, concurrency, delayMs });
 
   // Determine which languages to process
   const languagesToProcess = options.language
     ? [options.language]
-    : config.languages.filter((lang) => lang !== config.sourceLanguage);
+    : config.languages.filter((language) => language !== config.sourceLanguage);
 
   // Sync structure before auto-filling to ensure all files exist
   console.log('🔄 Synchronizing translation structure...');
   const syncResult = syncTranslationStructure(translationsPath, config.languages, config.sourceLanguage);
 
-  if (syncResult.createdFiles.length > 0) {
+  if (syncResult.createdFiles.length) {
     console.log(`Created ${syncResult.createdFiles.length} namespace files\n`);
   }
 
-  const mode = force ? 'all keys (--force)' : retranslateChanged ? 'missing, empty & changed' : 'missing & empty';
+  const mode = describeMode(force, retranslateChanged);
+  const providerLabel = setup.provider.model ? `${setup.provider.name} (${setup.provider.model})` : setup.provider.name;
 
   console.log('=====');
   console.log('Auto-filling translations');
   console.log('=====');
+  console.log(`Provider: ${providerLabel}${setup.fallback ? `, falling back to ${setup.fallback.name}` : ''}`);
   console.log(`Languages: ${languagesToProcess.join(', ')}`);
   console.log(`Mode: ${mode}`);
   console.log(`Limit: ${limit === Infinity ? 'unlimited' : limit}`);
@@ -160,106 +125,62 @@ export async function autoFillTranslations(
   console.log(`Dry run: ${dryRun}`);
   console.log('=====');
 
-  // Source-hash metadata is updated as translations are written so future runs
-  // can detect when a source string changes again.
+  // Source-hash metadata is updated and saved as each namespace is written so
+  // future runs can detect when a source string changes again.
   const metadata = readMetadata(translationsPath);
-
-  let totalProcessed = 0;
-  let totalTranslated = 0;
+  const selected: Array<{ language: string; namespace: string; key: string }> = [];
+  let skippedManual = 0;
 
   for (const language of languagesToProcess) {
-    if (totalProcessed >= limit) {
+    if (selected.length >= limit) {
       console.log(`\nReached limit of ${limit} translations`);
       break;
     }
 
-    console.log(`\nProcessing language: ${language}`);
-
-    // Determine which keys to (re-)translate for this language
-    const missing = getFillItemsForLanguage(projectRoot, translationsPath, config.sourceLanguage, language, {
+    const targetTranslations = readTranslations(translationsPath, language);
+    const items = getFillItemsForLanguage(projectRoot, translationsPath, config.sourceLanguage, language, {
       retranslateChanged,
       force
-    });
-
-    if (!missing.length) {
-      console.log('  Nothing to translate');
-      continue;
-    }
-
-    console.log(`  Found ${missing.length} translations to fill`);
-
-    // Process up to the remaining limit
-    const remainingLimit = limit - totalProcessed;
-    const itemsToProcess = missing.slice(0, remainingLimit === Infinity ? missing.length : remainingLimit);
-
-    // Process translations in parallel with concurrency control
-    const results = await processConcurrently(itemsToProcess, concurrency, async (item, index) => {
-      const currentCount = totalProcessed + index + 1;
-      const limitDisplay = limit === Infinity ? itemsToProcess.length : limit;
-
-      try {
-        console.log(`  [${currentCount}/${limitDisplay}] Translating ${item.namespace}.${item.key}`);
-        console.log(`    EN: "${item.sourceValue}"`);
-
-        // Translate the text
-        const translated = await translateText(
-          item.sourceValue,
-          language,
-          config.sourceLanguage,
-          apiKey,
-          config.useFallbackLanguages,
-          config.protectedTerms
-        );
-        console.log(`    ${language.toUpperCase()}: "${translated}"`);
-
-        if (!dryRun) {
-          // Read current translations
-          const translations = readTranslations(translationsPath, language);
-
-          if (!translations[item.namespace]) {
-            translations[item.namespace] = {};
-          }
-
-          // Update the translation
-          translations[item.namespace][item.key] = translated;
-          const sorted = sortKeys(translations[item.namespace]);
-
-          // Write back
-          writeTranslation(translationsPath, language, item.namespace, sorted);
-
-          // Record the source value this translation was generated from
-          setSourceHash(metadata, language, item.namespace, item.key, item.sourceValue);
-          console.log('    ✓ Saved');
-        } else {
-          console.log('    ✓ Dry run - not saved');
-        }
-
-        // Optional delay between requests (useful for rate limiting)
-        if (delayMs > 0) {
-          await new Promise((resolve) => setTimeout(resolve, delayMs));
-        }
-
-        return { success: true, item };
-      } catch (error) {
-        console.error(`    ✗ Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
-        return { success: false, item };
+    }).filter((item) => {
+      // Missing and empty keys always need a value; replacing a hand-edited one needs opting in
+      const current = targetTranslations[item.namespace]?.[item.key];
+      const keep =
+        item.type === 'missing' ||
+        item.type === 'empty' ||
+        includeManualEdits ||
+        current === undefined ||
+        !isManuallyEdited(metadata, language, item.namespace, item.key, current);
+      if (!keep) {
+        skippedManual++;
       }
+      return keep;
     });
 
-    // Update totals
-    totalProcessed += itemsToProcess.length;
-    totalTranslated += results.filter((r) => r.success).length;
-
-    // Persist recorded source hashes after each language so progress survives
-    // an interruption on long runs.
-    if (!dryRun) {
-      writeMetadata(translationsPath, metadata);
-    }
+    console.log(`\n${language}: ${items.length ? `${items.length} translations to fill` : 'nothing to translate'}`);
+    selected.push(...items.slice(0, limit - selected.length));
   }
 
+  if (skippedManual) {
+    console.log(
+      `\nℹ Skipped ${skippedManual} translations edited by hand (use --include-manual-edits to replace them)`
+    );
+  }
+
+  const result = await runTranslations({
+    projectRoot,
+    config,
+    setup,
+    jobs: groupIntoJobs(selected),
+    metadata,
+    dryRun,
+    concurrency
+  });
+
+  printFailures(result.failed);
+
   console.log('\n=====');
-  console.log(`Total processed: ${totalProcessed}`);
-  console.log(`Total translated: ${totalTranslated}`);
+  console.log(`Total processed: ${selected.length}`);
+  console.log(`Total translated: ${result.translated.length}`);
   if (dryRun) {
     console.log('⚠ Dry run - no changes were saved');
   }
@@ -273,69 +194,32 @@ export async function fillNamespace(
   projectRoot: string,
   language: string,
   namespace: string,
-  apiKey: string
+  apiKey?: string
 ): Promise<void> {
   const config = loadConfig(projectRoot);
   const translationsPath = path.join(projectRoot, config.translationsPath);
-
-  // Set up the translation provider based on config (only if not already set by user)
-  const currentProvider = getTranslationProvider();
-  const isDefaultGoogleProvider = currentProvider.constructor.name === 'GoogleTranslateProvider';
-
-  // Only set provider if user hasn't already set a custom one
-  if (isDefaultGoogleProvider) {
-    const provider = config.provider || 'deepl';
-    if (provider === 'deepl') {
-      setTranslationProvider(new DeepLTranslateProvider());
-    } else {
-      setTranslationProvider(new GoogleTranslateProvider());
-    }
-  }
+  const setup = createProvider(config, { apiKey });
 
   console.log(`Filling translations for ${language}/${namespace}.json`);
 
-  // Read source and target translations
-  const sourceTranslations = readTranslations(translationsPath, config.sourceLanguage);
-  const targetTranslations = readTranslations(translationsPath, language);
+  const sourceKeys = readTranslations(translationsPath, config.sourceLanguage)[namespace] || {};
+  const targetKeys = readTranslations(translationsPath, language)[namespace] || {};
+  const keys = Object.keys(sourceKeys).filter((key) => !targetKeys[key]?.trim());
 
-  const sourceKeys = sourceTranslations[namespace] || {};
-  const targetKeys = targetTranslations[namespace] || {};
+  if (!keys.length) {
+    console.log('No translations to fill');
+    return;
+  }
 
   const metadata = readMetadata(translationsPath);
-  let count = 0;
+  const result = await runTranslations({
+    projectRoot,
+    config,
+    setup,
+    jobs: [{ language, namespace, keys }],
+    metadata
+  });
 
-  for (const [key, sourceValue] of Object.entries(sourceKeys)) {
-    const targetValue = targetKeys[key];
-
-    // Skip if already has value
-    if (targetValue && targetValue.trim() !== '') {
-      continue;
-    }
-
-    console.log(`  Translating ${key}...`);
-    const translated = await translateText(
-      sourceValue,
-      language,
-      config.sourceLanguage,
-      apiKey,
-      config.useFallbackLanguages ?? true,
-      config.protectedTerms ?? []
-    );
-    targetKeys[key] = translated;
-    setSourceHash(metadata, language, namespace, key, sourceValue);
-    count++;
-
-    // Small delay
-    await new Promise((resolve) => setTimeout(resolve, 100));
-  }
-
-  // Write back
-  if (count > 0) {
-    const sorted = sortKeys(targetKeys);
-    writeTranslation(translationsPath, language, namespace, sorted);
-    writeMetadata(translationsPath, metadata);
-    console.log(`✓ Filled ${count} translations`);
-  } else {
-    console.log('No translations to fill');
-  }
+  printFailures(result.failed);
+  console.log(`✓ Filled ${result.translated.length} translations`);
 }

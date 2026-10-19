@@ -3,8 +3,9 @@
  * Only translates content outside of {{variable}} interpolations
  */
 
+import { isContextualProvider } from './contextual-provider.js';
 import { GoogleTranslateProvider } from './google-translate-provider';
-import type { TranslationProvider } from './translator-interface';
+import type { ContextualTranslationProvider, TranslationProvider } from './translator-interface';
 
 /**
  * Default translation provider (Google Translate)
@@ -14,21 +15,29 @@ const defaultProvider: TranslationProvider = new GoogleTranslateProvider();
 /**
  * Custom translation provider (if set by user)
  */
-let customProvider: TranslationProvider | null = null;
+let customProvider: TranslationProvider | ContextualTranslationProvider | null = null;
 
 /**
- * Set a custom translation provider
- * @param provider - Custom translation provider implementing TranslationProvider interface
+ * Set a custom translation provider. When set, it is used instead of the
+ * provider named in .translationsrc.json.
+ * @param provider - A provider translating one string per call, or a contextual provider translating batches
  */
-export function setTranslationProvider(provider: TranslationProvider): void {
+export function setTranslationProvider(provider: TranslationProvider | ContextualTranslationProvider): void {
   customProvider = provider;
 }
 
 /**
- * Get the active translation provider (custom or default)
+ * The provider set with {@link setTranslationProvider}, or null when the config decides
+ */
+export function getCustomTranslationProvider(): TranslationProvider | ContextualTranslationProvider | null {
+  return customProvider;
+}
+
+/**
+ * Get the active single-string translation provider (custom or default)
  */
 export function getTranslationProvider(): TranslationProvider {
-  return customProvider || defaultProvider;
+  return customProvider && !isContextualProvider(customProvider) ? customProvider : defaultProvider;
 }
 
 /**
