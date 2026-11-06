@@ -1,5 +1,6 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { resolveTargetLanguages } from '../core/schema.js';
 import { isManuallyEdited, readMetadata, setSourceHash, writeMetadata } from '../utils/metadata.js';
 import { createProvider } from '../utils/provider-factory.js';
 import { groupIntoJobs, printFailures, runTranslations } from '../utils/translation-runner.js';
@@ -56,6 +57,7 @@ export async function reviewTranslations(
   const config = loadConfig(projectRoot);
   const translationsPath = path.join(projectRoot, config.translationsPath);
   const { language, namespace, apiKey, concurrency = 5, outputPath = DEFAULT_REVIEW_REPORT } = options;
+  const languages = resolveTargetLanguages(config, language);
 
   const setup = createProvider(config, { apiKey, concurrency });
   if (!setup.provider.supports.review) {
@@ -66,7 +68,6 @@ export async function reviewTranslations(
 
   const sourceTranslations = readTranslations(translationsPath, config.sourceLanguage);
   const metadata = readMetadata(translationsPath);
-  const languages = language ? [language] : config.languages.filter((lang) => lang !== config.sourceLanguage);
   const selected: Array<{ language: string; namespace: string; key: string }> = [];
   let skippedManual = 0;
 

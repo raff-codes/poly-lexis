@@ -475,6 +475,36 @@ describe('review', () => {
     expect(provider.requests[0].items.map((item) => item.key)).toEqual(['COL_COUNTED']);
   });
 
+  test('reviews only the language asked for', async () => {
+    const configPath = path.join(root, '.translationsrc.json');
+    writeJson(configPath, { ...readJson(configPath), languages: ['en', 'fr', 'de'] });
+    writeJson(path.join(locales, 'de', 'stocktake.json'), { STATUS_OPEN: 'Öffnen', COL_COUNTED: 'Gezählt' });
+    const provider = new RecordingProvider('claude-code', fixOpen);
+    setTranslationProvider(provider);
+
+    await reviewTranslations(root, { language: 'de' });
+
+    expect(provider.requests.map((request) => request.targetLang)).toEqual(['de']);
+  });
+
+  test('refuses a language that is not configured', async () => {
+    const provider = new RecordingProvider('claude-code', fixOpen);
+    setTranslationProvider(provider);
+
+    await expect(reviewTranslations(root, { language: 'frr' })).rejects.toThrow(
+      '"frr" is not in "languages" in .translationsrc.json. Pick one of: fr'
+    );
+    expect(provider.requests).toEqual([]);
+  });
+
+  test('refuses the source language', async () => {
+    setTranslationProvider(new RecordingProvider('claude-code', fixOpen));
+
+    await expect(reviewTranslations(root, { language: 'en' })).rejects.toThrow(
+      '"en" is the source language, so it has no translations to process. Pick a target language: fr'
+    );
+  });
+
   test('refuses a provider that cannot follow review instructions', async () => {
     setTranslationProvider(new RecordingProvider('deepl', markAll, { review: false }));
 
