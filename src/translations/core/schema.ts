@@ -1,4 +1,5 @@
 import { LANGUAGE_FALLBACK_MAP } from '../utils/language-fallback-map.js';
+import type { TranslationConfig } from './types.js';
 
 /**
  * Translation provider types
@@ -444,6 +445,39 @@ export function validateLanguagesForProvider(
     valid: !invalid.length,
     invalid
   };
+}
+
+/** The configured languages translations are written to: every language except the source */
+export function getTargetLanguages(
+  config: Pick<Required<TranslationConfig>, 'languages' | 'sourceLanguage'>
+): string[] {
+  return config.languages.filter((language) => language !== config.sourceLanguage);
+}
+
+/**
+ * The target languages a command should process: just `language` when one was
+ * picked, otherwise every target language. Throws when `language` is the source
+ * language or isn't in the configured `languages`.
+ */
+export function resolveTargetLanguages(
+  config: Pick<Required<TranslationConfig>, 'languages' | 'sourceLanguage'>,
+  language?: string
+): string[] {
+  const targetLanguages = getTargetLanguages(config);
+  if (!language) {
+    return targetLanguages;
+  }
+  if (language === config.sourceLanguage) {
+    throw new Error(
+      `"${language}" is the source language, so it has no translations to process. Pick a target language: ${targetLanguages.join(', ')}`
+    );
+  }
+  if (!targetLanguages.includes(language)) {
+    throw new Error(
+      `"${language}" is not in "languages" in .translationsrc.json. Pick one of: ${targetLanguages.join(', ')}`
+    );
+  }
+  return [language];
 }
 
 /**

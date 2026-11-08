@@ -7,7 +7,7 @@ import { addTranslationKey } from '../translations/cli/add-key.js';
 import { loadConfig } from '../translations/cli/init.js';
 import { initTranslationsInteractive } from '../translations/cli/init-interactive.js';
 import { manageTranslations } from '../translations/cli/manage.js';
-import type { TranslationProviderType } from '../translations/core/schema.js';
+import { getTargetLanguages, type TranslationProviderType } from '../translations/core/schema.js';
 import { getApiKeyEnvVar } from '../translations/utils/provider-factory.js';
 import { readNamespaceContexts } from '../translations/utils/source-context.js';
 import { getNamespaces } from '../translations/utils/utils.js';
@@ -74,6 +74,28 @@ async function promptForNamespace(existingNamespaces: string[]): Promise<{ names
 
   const namespace = await input({ message: 'Enter new namespace name:', validate: validateNamespaceName });
   return { namespace, isNew: true };
+}
+
+/** Choice value meaning "review every target language" in the review language prompt */
+const ALL_LANGUAGES_CHOICE = '__all__';
+
+/**
+ * Ask which target language to review; `undefined` means all of them. Skips the
+ * prompt when there is only one target language to choose.
+ */
+async function promptForReviewLanguage(targetLanguages: string[]): Promise<string | undefined> {
+  if (targetLanguages.length < 2) {
+    return undefined;
+  }
+
+  const choice = await select({
+    message: 'Which language should be reviewed?',
+    choices: [
+      { name: '🌍 All languages', value: ALL_LANGUAGES_CHOICE },
+      ...targetLanguages.map((language) => ({ name: language, value: language }))
+    ]
+  });
+  return choice === ALL_LANGUAGES_CHOICE ? undefined : choice;
 }
 
 /**
@@ -590,7 +612,8 @@ else if (command === 'add') {
         } else if (action === 'review') {
           const { reviewTranslations } = await import('../translations/cli/review.js');
           const config = loadConfig(process.cwd());
-          await reviewTranslations(process.cwd(), { apiKey: resolveApiKey(config.provider).apiKey });
+          const language = await promptForReviewLanguage(getTargetLanguages(config));
+          await reviewTranslations(process.cwd(), { language, apiKey: resolveApiKey(config.provider).apiKey });
         } else if (action === 'find-unused') {
           const { findUnusedKeys, printUnusedKeysResult } = await import('../translations/cli/find-unused.js');
           const result = findUnusedKeys(process.cwd());
