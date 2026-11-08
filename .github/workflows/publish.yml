@@ -60,6 +60,12 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      # changesets picks pnpm because pnpm-lock.yaml exists, so pnpm must be on PATH
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 12
+
       - name: Create Release Pull Request or Publish to npm
         id: changesets
         uses: changesets/action@v1
